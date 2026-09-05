@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../backup/backup_screen.dart';
 import '../budgets/budget_screen.dart';
 import '../categories/category_list_screen.dart';
 import '../people/person_list_screen.dart';
@@ -54,6 +55,18 @@ class SettingsScreen extends ConsumerWidget {
             onTap: () => Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => const BudgetScreen()),
+            ),
+          ),
+          const Divider(),
+          const _SectionLabel('An toàn dữ liệu'),
+          ListTile(
+            leading: const Icon(Icons.backup_outlined),
+            title: const Text('Sao lưu'),
+            subtitle: const Text('Xuất ra file, khôi phục khi cần'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const BackupScreen()),
             ),
           ),
           const Divider(),
