@@ -217,8 +217,9 @@ class _BudgetSummary extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final budgets = ref.watch(budgetsProvider(monthKey));
     final list = budgets.valueOrNull ?? const <BudgetProgress>[];
-    final alerts =
-        list.where((b) => b.isOver || b.isNearLimit).toList();
+    // Gồm cả những hạn mức tuy chưa chạm trần nhưng đang tiêu nhanh hơn nhịp —
+    // biết sớm thì còn kịp điều chỉnh.
+    final alerts = list.where((b) => b.needsAttention).toList();
 
     if (alerts.isEmpty) return const SizedBox.shrink();
 
@@ -279,8 +280,9 @@ class _BudgetAlertRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final over = progress.isOver;
-    final color = over ? expenseColor(context) : const Color(0xFFEF6C00);
+    final style = paceStyle(context, progress.pace);
+    final canStillSpend =
+        progress.daysRemaining > 0 && progress.remaining > 0;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
@@ -288,11 +290,7 @@ class _BudgetAlertRow extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(
-                over ? Icons.error_outline : Icons.warning_amber_outlined,
-                size: 18,
-                color: color,
-              ),
+              Icon(style.icon, size: 18, color: style.color),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
@@ -305,26 +303,36 @@ class _BudgetAlertRow extends StatelessWidget {
                 ),
               ),
               Text(
-                over
+                progress.isOver
                     ? 'Vượt ${formatVndShort(-progress.remaining)}'
                     : 'Còn ${formatVndShort(progress.remaining)}',
                 style: TextStyle(
                   fontSize: 12.5,
                   fontWeight: FontWeight.w600,
-                  color: color,
+                  color: style.color,
                 ),
               ),
             ],
           ),
           const SizedBox(height: 8),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: LinearProgressIndicator(
-              value: progress.ratio.clamp(0.0, 1.0),
-              minHeight: 6,
-              backgroundColor:
-                  scheme.surfaceContainerHighest.withValues(alpha: 0.8),
-              valueColor: AlwaysStoppedAnimation(color),
+          PaceMarkerBar(
+            progress: progress,
+            color: style.color,
+            height: 6,
+          ),
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              canStillSpend
+                  ? 'Còn ${progress.daysRemaining} ngày · tiêu dưới '
+                      '${formatVndShort(progress.remainingDailyAllowance)}/ngày '
+                      'thì vừa đủ'
+                  : progress.isOver
+                      ? 'Hạn mức tháng này đã dùng hết'
+                      : 'Hết tháng, còn dư '
+                          '${formatVndShort(progress.remaining)}',
+              style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
             ),
           ),
         ],

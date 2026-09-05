@@ -71,6 +71,31 @@ const _weekdayNames = <int, String>{
   DateTime.sunday: 'Chủ Nhật',
 };
 
+/// Số ngày của một tháng, ví dụ 202602 -> 28.
+int daysInMonth(int monthKey) {
+  final year = monthKey ~/ 100;
+  final month = monthKey % 100;
+  return DateTime(year, month + 1, 0).day;
+}
+
+/// Đã qua bao nhiêu ngày của tháng, tính cả ngày hôm nay.
+///
+/// Tháng đã kết thúc thì trả về trọn số ngày; tháng chưa tới thì trả về 0.
+/// Dùng để biết mình đang ở đâu trên chặng đường của tháng.
+int daysElapsedIn(int monthKey, {DateTime? now}) {
+  final today = now ?? DateTime.now();
+  final currentKey = monthKeyOf(today);
+  if (monthKey < currentKey) return daysInMonth(monthKey);
+  if (monthKey > currentKey) return 0;
+  return today.day;
+}
+
+/// Số ngày còn lại của tháng, không tính hôm nay.
+int daysRemainingIn(int monthKey, {DateTime? now}) {
+  final elapsed = daysElapsedIn(monthKey, now: now);
+  return (daysInMonth(monthKey) - elapsed).clamp(0, 31);
+}
+
 /// Kẹp ngày trong tháng về ngày cuối cùng nếu tháng đó không có.
 /// Ví dụ ngày 31 ở tháng 2 sẽ thành 28 (hoặc 29 năm nhuận).
 DateTime clampDayOfMonth(int year, int month, int day) {

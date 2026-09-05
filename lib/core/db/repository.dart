@@ -810,18 +810,27 @@ class Repository {
       ''',
       variables: [Variable.withInt(monthKey), Variable.withInt(monthKey)],
       readsFrom: {db.budgets, db.categories, db.transactions},
-    ).watch().map((rows) => rows
-        .map((row) => BudgetProgress(
-              budgetId: row.read<int>('budget_id'),
-              categoryId: row.read<int>('category_id'),
-              categoryName: row.read<String>('category_name'),
-              colorValue: row.read<int?>('category_color'),
-              iconKey: row.read<String?>('category_icon'),
-              limitAmount: row.read<int>('limit_amount'),
-              spent: row.read<int>('spent'),
-              isRecurring: row.read<int?>('budget_month') == null,
-            ))
-        .toList());
+    ).watch().map((rows) {
+      // Tính một lần cho cả danh sách thay vì lặp lại ở từng dòng.
+      final totalDays = daysInMonth(monthKey);
+      final elapsed = daysElapsedIn(monthKey);
+
+      return rows
+          .map((row) => BudgetProgress(
+                budgetId: row.read<int>('budget_id'),
+                categoryId: row.read<int>('category_id'),
+                categoryName: row.read<String>('category_name'),
+                colorValue: row.read<int?>('category_color'),
+                iconKey: row.read<String?>('category_icon'),
+                limitAmount: row.read<int>('limit_amount'),
+                spent: row.read<int>('spent'),
+                isRecurring: row.read<int?>('budget_month') == null,
+                monthKey: monthKey,
+                daysInMonth: totalDays,
+                daysElapsed: elapsed,
+              ))
+          .toList();
+    });
   }
 
   /// Đặt hoặc cập nhật hạn mức cho một danh mục.
@@ -878,7 +887,26 @@ class Repository {
   String _uuid() => const Uuid().v4();
 }
 
+/// Tình trạng nhịp độ tiêu tiền so với chặng đường của tháng.
+enum BudgetPace {
+  /// Đã tiêu hết hạn mức.
+  over,
+
+  /// Tiêu nhanh hơn nhịp đều đáng kể — cứ đà này sẽ hết sớm.
+  fast,
+
+  /// Bám sát nhịp đều.
+  onTrack,
+
+  /// Tiêu chậm hơn nhịp, đang dư dả.
+  slow,
+}
+
 /// Một hạn mức kèm tiến độ chi tiêu trong tháng.
+///
+/// Ngoài chuyện đã tiêu bao nhiêu, lớp này còn trả lời câu hỏi quan trọng hơn:
+/// *tiêu như vậy có nhanh quá so với thời điểm này của tháng không*, và
+/// *những ngày còn lại được tiêu bao nhiêu mỗi ngày thì vừa đủ*.
 class BudgetProgress {
   const BudgetProgress({
     required this.budgetId,
@@ -887,6 +915,9 @@ class BudgetProgress {
     required this.limitAmount,
     required this.spent,
     required this.isRecurring,
+    required this.monthKey,
+    required this.daysInMonth,
+    required this.daysElapsed,
     this.colorValue,
     this.iconKey,
   });
@@ -900,6 +931,12 @@ class BudgetProgress {
   /// Hạn mức áp dụng cho mọi tháng, không riêng tháng nào.
   final bool isRecurring;
 
+  final int monthKey;
+  final int daysInMonth;
+
+  /// Số ngày của tháng đã trôi qua, tính cả hôm nay.
+  final int daysElapsed;
+
   final int? colorValue;
   final String? iconKey;
 
@@ -909,6 +946,85 @@ class BudgetProgress {
 
   /// Sắp chạm hạn mức: từ 80% trở lên nhưng chưa vượt.
   bool get isNearLimit => !isOver && ratio >= 0.8;
+
+  // ----- Nhịp độ --------------------------------------------------------
+
+  /// Số ngày còn lại của tháng, không tính hôm nay.
+  int get daysRemaining => (daysInMonth - daysElapsed).clamp(0, 31);
+
+  /// Tháng đã kết thúc thì không còn gì để cảnh báo nữa.
+  bool get isPastMonth => daysRemaining == 0 && daysElapsed >= daysInMonth;
+
+  /// Mức tiêu trung bình mỗi ngày nếu chia đều hạn mức cả tháng.
+  ///
+  /// Ngân sách ăn uống 3 triệu cho tháng 30 ngày thì đây là 100k.
+  int get dailyAllowance =>
+      daysInMonth == 0 ? 0 : limitAmount ~/ daysInMonth;
+
+  /// Thực tế đang tiêu bao nhiêu một ngày.
+  int get dailyAverage => daysElapsed == 0 ? 0 : spent ~/ daysElapsed;
+
+  /// Đáng lẽ đến giờ này mới nên tiêu tới đây.
+  int get expectedByNow =>
+      daysInMonth == 0 ? 0 : (limitAmount * daysElapsed) ~/ daysInMonth;
+
+  /// Tiêu quá mức đáng lẽ bao nhiêu. Âm nghĩa là đang tiêu tiết kiệm.
+  int get paceDelta => spent - expectedByNow;
+
+  /// Còn bao nhiêu tiền mỗi ngày cho những ngày còn lại.
+  ///
+  /// Đây là con số hữu ích nhất: hôm nay lỡ tay thì ngày mai biết phải rút
+  /// xuống bao nhiêu để cả tháng vẫn nằm trong hạn mức.
+  int get remainingDailyAllowance {
+    if (daysRemaining <= 0) return 0;
+    if (remaining <= 0) return 0;
+    return remaining ~/ daysRemaining;
+  }
+
+  /// Cứ giữ nhịp này thì hết tháng sẽ tiêu hết bao nhiêu.
+  int get projectedTotal =>
+      daysElapsed == 0 ? 0 : (spent * daysInMonth) ~/ daysElapsed;
+
+  /// Cứ giữ nhịp này thì còn cầm cự được thêm bao nhiêu ngày nữa.
+  /// Trả về null nếu đủ tiền tới hết tháng.
+  int? get daysUntilRunOut {
+    if (dailyAverage <= 0 || remaining <= 0) return null;
+    final days = remaining ~/ dailyAverage;
+    if (days >= daysRemaining) return null;
+    return days;
+  }
+
+  /// Cứ giữ nhịp này thì hạn mức cạn vào ngày thứ mấy của tháng.
+  /// Trả về null nếu đủ tiền tới hết tháng.
+  int? get projectedRunOutDay {
+    final days = daysUntilRunOut;
+    if (days == null) return null;
+    final day = daysElapsed + days;
+    return day > daysInMonth ? null : day;
+  }
+
+  BudgetPace get pace {
+    if (isOver) return BudgetPace.over;
+    if (daysElapsed == 0 || limitAmount == 0) return BudgetPace.onTrack;
+    final expected = expectedByNow;
+    if (expected == 0) return BudgetPace.onTrack;
+
+    final overshoot = (spent - expected) / expected;
+    // Ngưỡng 15%: đủ rộng để một bữa đắt hơn thường lệ không làm nổ cảnh báo,
+    // đủ hẹp để bắt được xu hướng tiêu vượt thật sự.
+    if (overshoot > 0.15) return BudgetPace.fast;
+    if (overshoot < -0.15) return BudgetPace.slow;
+    return BudgetPace.onTrack;
+  }
+
+  /// Có nên nhắc người dùng về hạn mức này không.
+  ///
+  /// Chỉ nhắc khi đã vượt, sắp chạm, hoặc đang tiêu nhanh hơn nhịp — và bỏ qua
+  /// những tháng đã kết thúc vì không còn gì để điều chỉnh.
+  bool get needsAttention {
+    if (isPastMonth) return false;
+    return isOver || isNearLimit || pace == BudgetPace.fast;
+  }
 }
 
 /// Tổng tiền của một danh mục trong một tháng.

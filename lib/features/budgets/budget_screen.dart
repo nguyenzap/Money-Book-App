@@ -57,7 +57,11 @@ class BudgetScreen extends ConsumerWidget {
             children: [
               _MonthHeader(monthKey: monthKey),
               const SizedBox(height: 12),
-              _OverallCard(limit: totalLimit, spent: totalSpent),
+              _OverallCard(
+                limit: totalLimit,
+                spent: totalSpent,
+                monthKey: monthKey,
+              ),
               const SizedBox(height: 20),
               for (final b in list) ...[
                 _BudgetCard(progress: b),
@@ -122,17 +126,34 @@ class _MonthHeader extends ConsumerWidget {
 }
 
 class _OverallCard extends StatelessWidget {
-  const _OverallCard({required this.limit, required this.spent});
+  const _OverallCard({
+    required this.limit,
+    required this.spent,
+    required this.monthKey,
+  });
 
   final int limit;
   final int spent;
+  final int monthKey;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final remaining = limit - spent;
-    final ratio = limit == 0 ? 0.0 : (spent / limit).clamp(0.0, 1.0);
     final over = spent > limit;
+
+    // Gộp mọi hạn mức lại thành một tiến độ chung để nói về nhịp tổng thể.
+    final overall = BudgetProgress(
+      budgetId: -1,
+      categoryId: -1,
+      categoryName: '',
+      limitAmount: limit,
+      spent: spent,
+      isRecurring: true,
+      monthKey: monthKey,
+      daysInMonth: daysInMonth(monthKey),
+      daysElapsed: daysElapsedIn(monthKey),
+    );
 
     return Card(
       color: scheme.surfaceContainerHigh,
@@ -155,17 +176,9 @@ class _OverallCard extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 14),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(4),
-              child: LinearProgressIndicator(
-                value: ratio,
-                minHeight: 8,
-                backgroundColor:
-                    scheme.surfaceContainerHighest.withValues(alpha: 0.8),
-                valueColor: AlwaysStoppedAnimation(
-                  over ? expenseColor(context) : scheme.primary,
-                ),
-              ),
+            PaceMarkerBar(
+              progress: overall,
+              color: over ? expenseColor(context) : scheme.primary,
             ),
             const SizedBox(height: 10),
             Row(
@@ -181,8 +194,72 @@ class _OverallCard extends StatelessWidget {
                 ),
               ],
             ),
+            if (!overall.isPastMonth && overall.daysRemaining > 0) ...[
+              const SizedBox(height: 12),
+              Divider(color: scheme.outlineVariant.withValues(alpha: 0.5)),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Icon(
+                    Icons.calendar_today_outlined,
+                    size: 15,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      overall.remaining > 0
+                          ? 'Còn ${overall.daysRemaining} ngày · '
+                              '${formatVnd(overall.remainingDailyAllowance)}'
+                              '/ngày'
+                          : 'Còn ${overall.daysRemaining} ngày, đã hết hạn mức',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                  _PaceBadge(pace: overall.pace),
+                ],
+              ),
+            ],
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Nhãn ngắn cho nhịp độ, dùng ở chỗ chật.
+class _PaceBadge extends StatelessWidget {
+  const _PaceBadge({required this.pace});
+
+  final BudgetPace pace;
+
+  @override
+  Widget build(BuildContext context) {
+    final style = paceStyle(context, pace);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: style.color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(style.icon, size: 13, color: style.color),
+          const SizedBox(width: 4),
+          Text(
+            style.label,
+            style: TextStyle(
+              fontSize: 11.5,
+              fontWeight: FontWeight.w600,
+              color: style.color,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -258,16 +335,7 @@ class _BudgetCard extends ConsumerWidget {
                 ],
               ),
               const SizedBox(height: 12),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(4),
-                child: LinearProgressIndicator(
-                  value: progress.ratio.clamp(0.0, 1.0),
-                  minHeight: 8,
-                  backgroundColor:
-                      scheme.surfaceContainerHighest.withValues(alpha: 0.8),
-                  valueColor: AlwaysStoppedAnimation(barColor),
-                ),
-              ),
+              PaceMarkerBar(progress: progress, color: barColor),
               const SizedBox(height: 10),
               Row(
                 children: [
@@ -303,11 +371,204 @@ class _BudgetCard extends ConsumerWidget {
                     ),
                 ],
               ),
+              const SizedBox(height: 12),
+              BudgetPaceRow(progress: progress),
             ],
           ),
         ),
       ),
     );
+  }
+}
+
+/// Thanh tiến độ kèm một vạch đánh dấu vị trí "đáng lẽ đang ở đây".
+///
+/// Vạch nằm ở chỗ tương ứng với phần tháng đã trôi qua. Phần tô vượt qua vạch
+/// nghĩa là đang tiêu nhanh hơn nhịp — nhìn một cái là thấy, không cần đọc số.
+class PaceMarkerBar extends StatelessWidget {
+  const PaceMarkerBar({
+    super.key,
+    required this.progress,
+    required this.color,
+    this.height = 8,
+  });
+
+  final BudgetProgress progress;
+  final Color color;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final showMarker = !progress.isPastMonth &&
+        progress.daysElapsed > 0 &&
+        progress.daysElapsed < progress.daysInMonth;
+    final markerAt = progress.daysInMonth == 0
+        ? 0.0
+        : progress.daysElapsed / progress.daysInMonth;
+
+    return SizedBox(
+      height: height + 6,
+      child: Stack(
+        alignment: Alignment.centerLeft,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: progress.ratio.clamp(0.0, 1.0),
+              minHeight: height,
+              backgroundColor:
+                  scheme.surfaceContainerHighest.withValues(alpha: 0.8),
+              valueColor: AlwaysStoppedAnimation(color),
+            ),
+          ),
+          if (showMarker)
+            LayoutBuilder(
+              builder: (context, constraints) {
+                return Padding(
+                  padding: EdgeInsets.only(
+                    left: (constraints.maxWidth * markerAt)
+                        .clamp(0.0, constraints.maxWidth - 2),
+                  ),
+                  child: Container(
+                    width: 2,
+                    height: height + 6,
+                    decoration: BoxDecoration(
+                      color: scheme.onSurface.withValues(alpha: 0.55),
+                      borderRadius: BorderRadius.circular(1),
+                    ),
+                  ),
+                );
+              },
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Màu và biểu tượng ứng với từng tình trạng nhịp độ.
+///
+/// Luôn đi kèm biểu tượng và chữ, không bao giờ chỉ dựa vào màu.
+({Color color, IconData icon, String label}) paceStyle(
+  BuildContext context,
+  BudgetPace pace,
+) {
+  return switch (pace) {
+    BudgetPace.over => (
+        color: expenseColor(context),
+        icon: Icons.error_outline,
+        label: 'Đã vượt',
+      ),
+    BudgetPace.fast => (
+        color: const Color(0xFFEF6C00),
+        icon: Icons.trending_up,
+        label: 'Tiêu nhanh',
+      ),
+    BudgetPace.onTrack => (
+        color: Theme.of(context).colorScheme.primary,
+        icon: Icons.check_circle_outline,
+        label: 'Đúng nhịp',
+      ),
+    BudgetPace.slow => (
+        color: incomeColor(context),
+        icon: Icons.trending_down,
+        label: 'Đang dư dả',
+      ),
+  };
+}
+
+/// Phần nói về nhịp độ tiêu tiền của một hạn mức.
+///
+/// Trả lời hai câu hỏi mà con số "đã tiêu bao nhiêu" không trả lời được:
+/// tiêu như vậy có nhanh quá so với thời điểm này của tháng không, và những
+/// ngày còn lại được tiêu bao nhiêu mỗi ngày thì vừa đủ.
+class BudgetPaceRow extends StatelessWidget {
+  const BudgetPaceRow({super.key, required this.progress});
+
+  final BudgetProgress progress;
+
+  @override
+  Widget build(BuildContext context) {
+    if (progress.isPastMonth) return const SizedBox.shrink();
+
+    final scheme = Theme.of(context).colorScheme;
+    final style = paceStyle(context, progress.pace);
+    final canStillSpend =
+        progress.daysRemaining > 0 && progress.remaining > 0;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: style.color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(style.icon, size: 16, color: style.color),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  _headline(),
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: style.color,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            canStillSpend
+                ? 'Còn ${progress.daysRemaining} ngày, tiêu dưới '
+                    '${formatVnd(progress.remainingDailyAllowance)} mỗi ngày '
+                    'thì vừa đủ.'
+                : _fallbackDetail(),
+            style: TextStyle(fontSize: 12.5, color: scheme.onSurfaceVariant),
+          ),
+          if (progress.pace == BudgetPace.fast &&
+              progress.daysUntilRunOut != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              // Nói số ngày còn cầm cự được, vì "hết tiền vào ngày 10" nghe
+              // như còn xa trong khi thực ra chỉ còn vài hôm nữa.
+              progress.daysUntilRunOut == 0
+                  ? 'Giữ nhịp này thì hôm nay là hết tiền.'
+                  : 'Giữ nhịp này thì khoảng ${progress.daysUntilRunOut} ngày '
+                      'nữa là hết, tức ngày ${progress.projectedRunOutDay}.',
+              style: TextStyle(fontSize: 12, color: scheme.outline),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  String _headline() {
+    final avg = formatVndShort(progress.dailyAverage);
+    final allowance = formatVndShort(progress.dailyAllowance);
+
+    return switch (progress.pace) {
+      BudgetPace.over =>
+        'Đã vượt hạn mức ${formatVnd(-progress.remaining)}',
+      BudgetPace.fast =>
+        'Đang tiêu $avg mỗi ngày, cao hơn mức $allowance',
+      BudgetPace.onTrack => 'Đúng nhịp — khoảng $avg mỗi ngày',
+      BudgetPace.slow => 'Đang tiết kiệm — mới $avg mỗi ngày',
+    };
+  }
+
+  String _fallbackDetail() {
+    if (progress.remaining <= 0) {
+      return 'Hạn mức tháng này đã dùng hết.';
+    }
+    return 'Hết tháng rồi, còn dư ${formatVnd(progress.remaining)}.';
   }
 }
 
