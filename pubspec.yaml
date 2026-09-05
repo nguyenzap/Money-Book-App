@@ -1,0 +1,53 @@
+name: moneybook
+description: "Quản lý chi tiêu cá nhân - offline, dữ liệu lưu trong máy."
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.11.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+
+  # State management
+  flutter_riverpod: ^2.6.1
+
+  # Database
+  drift: ^2.28.2
+  sqlite3: ^2.9.0
+  sqlite3_flutter_libs: ^0.5.40
+  path_provider: ^2.1.5
+  path: ^1.9.1
+
+  # Format
+  intl: ^0.20.2
+
+  # Notification
+  flutter_local_notifications: ^19.4.2
+  timezone: ^0.10.1
+  flutter_timezone: ^4.1.1
+
+  # Backup
+  file_picker: ^10.3.3
+  share_plus: ^12.0.0
+  csv: ^6.0.0
+
+  # Misc
+  uuid: ^4.5.1
+  package_info_plus: ^9.0.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  build_runner: ^2.4.13
+  drift_dev: ^2.28.2
+
+flutter:
+  uses-material-design: true
