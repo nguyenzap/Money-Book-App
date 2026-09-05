@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/db/database.dart';
+import '../../core/db/repository.dart';
 import '../../core/domain/tx_kind.dart';
 import '../../core/format/money.dart';
 import '../../core/icons.dart';
@@ -54,6 +55,22 @@ class _SettleDebtSheetState extends ConsumerState<_SettleDebtSheet> {
     super.initState();
     _amount = widget.net.abs();
     _controller = TextEditingController(text: groupDigits(_amount));
+  }
+
+  /// Chọn sẵn một ví để người dùng chỉ còn bấm xác nhận.
+  ///
+  /// Khi trả nợ thì lấy ví nhiều tiền nhất — khả năng cao là ví sẽ dùng, và
+  /// chắc chắn đủ số dư. Khi thu nợ thì lấy ví đầu danh sách.
+  void _pickDefaultWallet(List<WalletWithBalance> wallets) {
+    if (_walletId != null || wallets.isEmpty) return;
+    if (_theyOweMe) {
+      _walletId = wallets.first.id;
+    } else {
+      final richest = wallets.reduce(
+        (a, b) => b.balance > a.balance ? b : a,
+      );
+      _walletId = richest.id;
+    }
   }
 
   @override
@@ -159,7 +176,9 @@ class _SettleDebtSheetState extends ConsumerState<_SettleDebtSheet> {
               wallets.when(
                 loading: () => const LinearProgressIndicator(),
                 error: (e, _) => Text('Lỗi: $e'),
-                data: (list) => DropdownButtonFormField<int>(
+                data: (list) {
+                  _pickDefaultWallet(list);
+                  return DropdownButtonFormField<int>(
                   initialValue: _walletId,
                   isExpanded: true,
                   decoration: InputDecoration(
@@ -197,11 +216,44 @@ class _SettleDebtSheetState extends ConsumerState<_SettleDebtSheet> {
                         ),
                       ),
                   ],
-                  onChanged: (v) => setState(() => _walletId = v),
-                ),
+                    onChanged: (v) => setState(() => _walletId = v),
+                  );
+                },
               ),
             ],
-            const SizedBox(height: 20),
+            const SizedBox(height: 14),
+            // Nói trước app sắp ghi gì, để không ai phải đoán.
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: scheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  Icon(_kind.icon, size: 18, color: scheme.onSurfaceVariant),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      _writeoff
+                          ? 'Ghi "${_kind.label}" ${formatVnd(_amount)} với '
+                              '${widget.person.name}, không đụng tới ví nào.'
+                          : _theyOweMe
+                              ? 'Ghi "${_kind.label}" ${formatVnd(_amount)}, '
+                                  'cộng vào ví bạn chọn.'
+                              : 'Ghi "${_kind.label}" ${formatVnd(_amount)}, '
+                                  'trừ vào ví bạn chọn.',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
             FilledButton.icon(
               onPressed: _settle,
               icon: const Icon(Icons.check),

@@ -10,6 +10,7 @@ import '../../core/widgets.dart';
 import '../people/person_list_screen.dart';
 import '../transactions/tx_editor_screen.dart';
 import 'debt_person_screen.dart';
+import 'settle_debt_sheet.dart';
 
 /// Sổ nợ tổng hợp: ai nợ mình bao nhiêu, mình nợ ai bao nhiêu.
 class DebtBookScreen extends ConsumerWidget {
@@ -201,22 +202,47 @@ class _DebtTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final person = summary.person;
+    final theyOweMe = summary.theyOweMe;
+
     return ListTile(
       leading: InitialAvatar(
         name: person.name,
         color: person.avatarColor == null ? null : Color(person.avatarColor!),
       ),
       title: Text(person.name),
-      trailing: Text(
-        formatVnd(summary.absAmount),
+      subtitle: Text(
+        theyOweMe ? 'Nợ bạn' : 'Bạn nợ',
         style: TextStyle(
-          fontWeight: FontWeight.bold,
-          fontSize: 15,
-          color: summary.theyOweMe
-              ? incomeColor(context)
-              : expenseColor(context),
-          fontFeatures: const [FontFeature.tabularFigures()],
+          fontSize: 12.5,
+          color: Theme.of(context).colorScheme.outline,
         ),
+      ),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            formatVnd(summary.absAmount),
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 15,
+              color: theyOweMe ? incomeColor(context) : expenseColor(context),
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
+          ),
+          const SizedBox(width: 6),
+          // Bấm một phát là mở bảng đã điền sẵn số tiền, người và loại giao
+          // dịch — chỉ còn xác nhận.
+          IconButton(
+            icon: const Icon(Icons.done_all),
+            tooltip: theyOweMe ? 'Thu nợ' : 'Trả nợ',
+            visualDensity: VisualDensity.compact,
+            onPressed: () => showSettleDebtSheet(
+              context,
+              person: person,
+              net: summary.net,
+            ),
+          ),
+        ],
       ),
       onTap: () => Navigator.push(
         context,

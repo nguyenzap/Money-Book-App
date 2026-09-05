@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../budgets/budget_screen.dart';
 import '../categories/category_list_screen.dart';
 import '../people/person_list_screen.dart';
 import '../wallets/wallet_list_screen.dart';
@@ -43,6 +44,16 @@ class SettingsScreen extends ConsumerWidget {
             onTap: () => Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => const PersonListScreen()),
+            ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.savings_outlined),
+            title: const Text('Ngân sách'),
+            subtitle: const Text('Hạn mức chi tiêu theo danh mục'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const BudgetScreen()),
             ),
           ),
           const Divider(),

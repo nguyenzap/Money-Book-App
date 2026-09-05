@@ -1,4 +1,5 @@
 import 'package:drift/drift.dart';
+import 'package:uuid/uuid.dart';
 
 import '../domain/tx_kind.dart';
 import '../format/dates.dart';
@@ -234,10 +235,14 @@ class Repository {
   }
 
   /// Xoá danh mục. Giao dịch cũ không mất, chỉ thành "Chưa phân loại".
+  ///
+  /// Hạn mức ngân sách của danh mục thì mất theo, vì một hạn mức không còn
+  /// danh mục thì không còn nghĩa gì.
   Future<void> deleteCategory(int id) async {
     await db.transaction(() async {
       await (db.update(db.transactions)..where((t) => t.categoryId.equals(id)))
           .write(const TransactionsCompanion(categoryId: Value(null)));
+      await (db.delete(db.budgets)..where((b) => b.categoryId.equals(id))).go();
       await (db.delete(db.categories)..where((c) => c.id.equals(id))).go();
     });
   }
@@ -588,6 +593,83 @@ class Repository {
     return (await q.getSingle()).read(countExp) ?? 0;
   }
 
+  /// Ghi một bữa trả dùm: mình trả trước toàn bộ, những người khác nợ lại
+  /// phần của họ.
+  ///
+  /// Sinh ra nhiều giao dịch cùng một [groupId]:
+  ///   * một khoản chi đúng bằng phần của mình — chỉ phần này mới vào thống kê
+  ///     và ngân sách, nên một bữa 200k chia bốn chỉ tính 50k tiền ăn;
+  ///   * mỗi người một khoản cho mượn bằng phần của họ, vào sổ nợ.
+  ///
+  /// Tổng tiền rời ví vẫn đúng bằng số đã trả. Bỏ qua phần của tôi nếu bằng 0
+  /// (trường hợp trả hộ hoàn toàn, mình không ăn).
+  ///
+  /// Trả về id của các giao dịch đã tạo.
+  Future<List<int>> addSplitBill({
+    required int walletFromId,
+    required int myShare,
+    required Map<int, int> sharesByPerson,
+    required DateTime occurredAt,
+    int? categoryId,
+    String? note,
+  }) async {
+    assert(myShare >= 0);
+    assert(sharesByPerson.values.every((v) => v > 0));
+
+    final groupId = _uuid();
+    final ids = <int>[];
+
+    await db.transaction(() async {
+      if (myShare > 0) {
+        ids.add(await addTransaction(
+          kind: TxKind.expense,
+          amount: myShare,
+          occurredAt: occurredAt,
+          walletFromId: walletFromId,
+          categoryId: categoryId,
+          note: note,
+          groupId: groupId,
+        ));
+      }
+      for (final entry in sharesByPerson.entries) {
+        ids.add(await addTransaction(
+          kind: TxKind.lend,
+          amount: entry.value,
+          occurredAt: occurredAt,
+          walletFromId: walletFromId,
+          personId: entry.key,
+          note: note == null ? 'Trả dùm' : '$note (trả dùm)',
+          groupId: groupId,
+        ));
+      }
+    });
+
+    return ids;
+  }
+
+  /// Các giao dịch cùng một nhóm với giao dịch đã cho (kể cả chính nó).
+  Future<List<TxView>> transactionsInGroup(String groupId) async {
+    final rows = await db.customSelect(
+      '''
+      SELECT t.*,
+             wf.name AS wf_name, wf.color_value AS wf_color, wf.icon_key AS wf_icon,
+             wt.name AS wt_name, wt.color_value AS wt_color, wt.icon_key AS wt_icon,
+             c.name  AS c_name,  c.color_value  AS c_color,  c.icon_key  AS c_icon,
+             p.name  AS p_name,  p.avatar_color AS p_color
+      FROM transactions t
+      LEFT JOIN wallets    wf ON wf.id = t.wallet_from_id
+      LEFT JOIN wallets    wt ON wt.id = t.wallet_to_id
+      LEFT JOIN categories c  ON c.id  = t.category_id
+      LEFT JOIN people     p  ON p.id  = t.person_id
+      WHERE t.group_id = ? AND t.deleted_at IS NULL
+      ORDER BY t.kind DESC, t.id
+      ''',
+      variables: [Variable.withString(groupId)],
+      readsFrom: {db.transactions, db.wallets, db.categories, db.people},
+    ).get();
+    return rows.map(_rowToTxView).toList();
+  }
+
   /// Điều chỉnh số dư ví cho khớp thực tế.
   ///
   /// Không sửa thẳng số dư ban đầu mà ghi một giao dịch chênh lệch, để lịch sử
@@ -697,7 +779,136 @@ class Repository {
         .map((rows) => rows.map(_rowToTxView).toList());
   }
 
+  // ----- Ngân sách ------------------------------------------------------
+
+  /// Hạn mức từng danh mục kèm số đã tiêu trong tháng.
+  ///
+  /// Số đã tiêu chỉ đếm giao dịch `expense`, nên tiền trả dùm cho bạn bè —
+  /// vốn được ghi thành các khoản `lend` — không làm vượt ngân sách oan.
+  Stream<List<BudgetProgress>> watchBudgets(int monthKey) {
+    return db.customSelect(
+      '''
+      SELECT b.id            AS budget_id,
+             b.limit_amount  AS limit_amount,
+             b.month_key     AS budget_month,
+             c.id            AS category_id,
+             c.name          AS category_name,
+             c.color_value   AS category_color,
+             c.icon_key      AS category_icon,
+             COALESCE((
+               SELECT SUM(t.amount) FROM transactions t
+               WHERE t.category_id = c.id
+                 AND t.kind = 'expense'
+                 AND t.month_key = ?
+                 AND t.deleted_at IS NULL
+             ), 0) AS spent
+      FROM budgets b
+      JOIN categories c ON c.id = b.category_id
+      WHERE (b.month_key IS NULL OR b.month_key = ?)
+        AND c.is_archived = 0
+      ORDER BY c.sort_order, c.id
+      ''',
+      variables: [Variable.withInt(monthKey), Variable.withInt(monthKey)],
+      readsFrom: {db.budgets, db.categories, db.transactions},
+    ).watch().map((rows) => rows
+        .map((row) => BudgetProgress(
+              budgetId: row.read<int>('budget_id'),
+              categoryId: row.read<int>('category_id'),
+              categoryName: row.read<String>('category_name'),
+              colorValue: row.read<int?>('category_color'),
+              iconKey: row.read<String?>('category_icon'),
+              limitAmount: row.read<int>('limit_amount'),
+              spent: row.read<int>('spent'),
+              isRecurring: row.read<int?>('budget_month') == null,
+            ))
+        .toList());
+  }
+
+  /// Đặt hoặc cập nhật hạn mức cho một danh mục.
+  ///
+  /// [monthKey] null nghĩa là áp dụng cho mọi tháng.
+  ///
+  /// Tự tìm rồi cập nhật thay vì dựa vào `insertOnConflictUpdate`: SQLite coi
+  /// hai giá trị NULL là khác nhau, nên chỉ mục duy nhất trên
+  /// `(category_id, month_key)` không bắt được xung đột ở các hạn mức áp dụng
+  /// cho mọi tháng, và mỗi lần đặt lại sẽ đẻ thêm một dòng mới.
+  Future<void> setBudget({
+    required int categoryId,
+    required int limitAmount,
+    int? monthKey,
+  }) async {
+    assert(limitAmount > 0);
+    final now = _now();
+
+    await db.transaction(() async {
+      final query = db.select(db.budgets)
+        ..where((b) => b.categoryId.equals(categoryId))
+        ..where((b) => monthKey == null
+            ? b.monthKey.isNull()
+            : b.monthKey.equals(monthKey));
+      final existing = await query.getSingleOrNull();
+
+      if (existing == null) {
+        await db.into(db.budgets).insert(
+              BudgetsCompanion.insert(
+                categoryId: categoryId,
+                monthKey: Value(monthKey),
+                limitAmount: limitAmount,
+                createdAt: now,
+                updatedAt: now,
+              ),
+            );
+      } else {
+        await (db.update(db.budgets)..where((b) => b.id.equals(existing.id)))
+            .write(
+          BudgetsCompanion(
+            limitAmount: Value(limitAmount),
+            updatedAt: Value(now),
+          ),
+        );
+      }
+    });
+  }
+
+  Future<void> deleteBudget(int id) =>
+      (db.delete(db.budgets)..where((b) => b.id.equals(id))).go();
+
   int _now() => DateTime.now().millisecondsSinceEpoch;
+
+  String _uuid() => const Uuid().v4();
+}
+
+/// Một hạn mức kèm tiến độ chi tiêu trong tháng.
+class BudgetProgress {
+  const BudgetProgress({
+    required this.budgetId,
+    required this.categoryId,
+    required this.categoryName,
+    required this.limitAmount,
+    required this.spent,
+    required this.isRecurring,
+    this.colorValue,
+    this.iconKey,
+  });
+
+  final int budgetId;
+  final int categoryId;
+  final String categoryName;
+  final int limitAmount;
+  final int spent;
+
+  /// Hạn mức áp dụng cho mọi tháng, không riêng tháng nào.
+  final bool isRecurring;
+
+  final int? colorValue;
+  final String? iconKey;
+
+  int get remaining => limitAmount - spent;
+  double get ratio => limitAmount == 0 ? 0 : spent / limitAmount;
+  bool get isOver => spent > limitAmount;
+
+  /// Sắp chạm hạn mức: từ 80% trở lên nhưng chưa vượt.
+  bool get isNearLimit => !isOver && ratio >= 0.8;
 }
 
 /// Tổng tiền của một danh mục trong một tháng.

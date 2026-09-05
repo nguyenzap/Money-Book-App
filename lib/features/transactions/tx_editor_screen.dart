@@ -10,6 +10,7 @@ import '../../core/providers.dart';
 import '../../core/widgets.dart';
 import '../categories/category_edit_screen.dart';
 import '../people/person_edit_screen.dart';
+import 'split_bill_section.dart';
 
 /// Mở màn hình ghi giao dịch. Gom một chỗ để mọi nơi trong app gọi giống nhau.
 Future<void> openTxEditor(
@@ -67,7 +68,14 @@ class _TxEditorScreenState extends ConsumerState<TxEditorScreen> {
   int? _personId;
   late DateTime _occurredAt;
 
+  /// Chia tiền một hoá đơn. Chỉ áp dụng khi ghi mới một khoản chi — sửa một
+  /// giao dịch đã có thì không đụng tới cả nhóm.
+  final _split = SplitState();
+
   bool get _isEditing => widget.editing != null;
+
+  /// Có được chia tiền ở trạng thái hiện tại không.
+  bool get _canSplit => !_isEditing && _kind == TxKind.expense;
 
   @override
   void initState() {
@@ -105,6 +113,7 @@ class _TxEditorScreenState extends ConsumerState<TxEditorScreen> {
   void dispose() {
     _amountController.dispose();
     _noteController.dispose();
+    _split.dispose();
     super.dispose();
   }
 
@@ -118,6 +127,9 @@ class _TxEditorScreenState extends ConsumerState<TxEditorScreen> {
 
       if (!next.needsCategory) _categoryId = null;
       if (!next.needsPerson) _personId = null;
+
+      // Chia tiền chỉ có nghĩa với một khoản chi.
+      if (next != TxKind.expense) _split.enabled = false;
 
       if (next == TxKind.transfer) {
         _walletFromId ??= _walletToId;
@@ -204,6 +216,16 @@ class _TxEditorScreenState extends ConsumerState<TxEditorScreen> {
     final note = _noteController.text.trim();
     final repo = ref.read(repositoryProvider);
 
+    if (_canSplit && _split.enabled) {
+      final splitError = _split.validate(amount);
+      if (splitError != null) {
+        showSnack(context, splitError);
+        return;
+      }
+      await _saveSplitBill(repo, amount, note);
+      return;
+    }
+
     if (_isEditing) {
       await repo.updateTransaction(
         id: widget.editing!.tx.id,
@@ -232,6 +254,40 @@ class _TxEditorScreenState extends ConsumerState<TxEditorScreen> {
     if (!mounted) return;
     Navigator.pop(context);
     showSnack(context, _isEditing ? 'Đã cập nhật' : 'Đã ghi giao dịch');
+  }
+
+  Future<void> _saveSplitBill(Repository repo, int total, String note) async {
+    final shares = _split.sharesFor(total);
+    final myShare = _split.myShareFor(total);
+
+    final ids = await repo.addSplitBill(
+      walletFromId: _walletFromId!,
+      myShare: myShare,
+      sharesByPerson: shares,
+      occurredAt: _occurredAt,
+      categoryId: _categoryId,
+      note: note.isEmpty ? null : note,
+    );
+
+    if (!mounted) return;
+    Navigator.pop(context);
+
+    final theirs = shares.values.fold<int>(0, (sum, v) => sum + v);
+    showSnack(
+      context,
+      myShare > 0
+          ? 'Đã ghi ${formatVnd(myShare)} tiền của bạn và '
+              '${formatVnd(theirs)} cho ${shares.length} người nợ lại'
+          : 'Đã ghi ${formatVnd(theirs)} cho ${shares.length} người nợ lại',
+      action: SnackBarAction(
+        label: 'Hoàn tác',
+        onPressed: () async {
+          for (final id in ids) {
+            await repo.softDeleteTransaction(id);
+          }
+        },
+      ),
+    );
   }
 
   @override
@@ -271,9 +327,24 @@ class _TxEditorScreenState extends ConsumerState<TxEditorScreen> {
                 AmountField(
                   controller: _amountController,
                   autofocus: !_isEditing,
+                  label: _canSplit && _split.enabled
+                      ? 'Tổng hoá đơn'
+                      : 'Số tiền',
+                  onChanged: (_) {
+                    // Chia đều phụ thuộc vào tổng nên phải vẽ lại bảng chia.
+                    if (_canSplit && _split.enabled) setState(() {});
+                  },
                 ),
                 const SizedBox(height: 20),
                 ..._buildFieldsForKind(walletList),
+                if (_canSplit) ...[
+                  const SizedBox(height: 8),
+                  SplitBillSection(
+                    state: _split,
+                    total: parseVnd(_amountController.text),
+                    onChanged: () => setState(() {}),
+                  ),
+                ],
                 const SizedBox(height: 12),
                 ListTile(
                   shape: RoundedRectangleBorder(
@@ -311,7 +382,13 @@ class _TxEditorScreenState extends ConsumerState<TxEditorScreen> {
           child: FilledButton.icon(
             onPressed: _save,
             icon: const Icon(Icons.check),
-            label: Text(_isEditing ? 'Lưu thay đổi' : 'Ghi lại'),
+            label: Text(
+              _isEditing
+                  ? 'Lưu thay đổi'
+                  : (_canSplit && _split.enabled)
+                      ? 'Ghi và chia tiền'
+                      : 'Ghi lại',
+            ),
           ),
         ),
       ),

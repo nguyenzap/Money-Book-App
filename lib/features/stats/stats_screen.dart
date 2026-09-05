@@ -7,6 +7,7 @@ import '../../core/format/money.dart';
 import '../../core/icons.dart';
 import '../../core/providers.dart';
 import '../../core/theme.dart';
+import '../budgets/budget_screen.dart';
 import '../transactions/tx_editor_screen.dart';
 import '../transactions/tx_tile.dart';
 
@@ -38,6 +39,7 @@ class StatsScreen extends ConsumerWidget {
           const SizedBox(height: 16),
           _SummaryRow(monthKey: monthKey),
           const SizedBox(height: 20),
+          _BudgetSummary(monthKey: monthKey),
           _CategoryBreakdown(monthKey: monthKey),
           const SizedBox(height: 20),
           _MonthComparison(monthKey: monthKey),
@@ -197,6 +199,135 @@ class _StatTile extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Những hạn mức đang gần chạm hoặc đã vượt.
+///
+/// Chỉ hiện khi có gì đáng chú ý — không có thì im lặng, để màn thống kê khỏi
+/// dài thêm mà chẳng nói gì.
+class _BudgetSummary extends ConsumerWidget {
+  const _BudgetSummary({required this.monthKey});
+
+  final int monthKey;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final budgets = ref.watch(budgetsProvider(monthKey));
+    final list = budgets.valueOrNull ?? const <BudgetProgress>[];
+    final alerts =
+        list.where((b) => b.isOver || b.isNearLimit).toList();
+
+    if (alerts.isEmpty) return const SizedBox.shrink();
+
+    final scheme = Theme.of(context).colorScheme;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Ngân sách cần để ý',
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w600),
+                ),
+              ),
+              TextButton(
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const BudgetScreen()),
+                ),
+                child: const Text('Xem hết'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Card(
+            child: Column(
+              children: [
+                for (var i = 0; i < alerts.length; i++) ...[
+                  if (i > 0) const Divider(height: 1, indent: 16),
+                  _BudgetAlertRow(progress: alerts[i]),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Tiền trả dùm cho người khác không tính vào đây.',
+            style: TextStyle(fontSize: 11.5, color: scheme.outline),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BudgetAlertRow extends StatelessWidget {
+  const _BudgetAlertRow({required this.progress});
+
+  final BudgetProgress progress;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final over = progress.isOver;
+    final color = over ? expenseColor(context) : const Color(0xFFEF6C00);
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Icon(
+                over ? Icons.error_outline : Icons.warning_amber_outlined,
+                size: 18,
+                color: color,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  progress.categoryName,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              Text(
+                over
+                    ? 'Vượt ${formatVndShort(-progress.remaining)}'
+                    : 'Còn ${formatVndShort(progress.remaining)}',
+                style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                  color: color,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: progress.ratio.clamp(0.0, 1.0),
+              minHeight: 6,
+              backgroundColor:
+                  scheme.surfaceContainerHighest.withValues(alpha: 0.8),
+              valueColor: AlwaysStoppedAnimation(color),
+            ),
+          ),
+        ],
       ),
     );
   }
