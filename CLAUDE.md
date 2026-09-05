@@ -7,7 +7,7 @@ trong máy, không server, không tài khoản.
 
 ```powershell
 flutter run -d <device>                 # dev, hot reload bằng phím r
-flutter test                            # 74 test, chạy trong ~2 giây
+flutter test                            # 123 test, chạy trong ~2 giây
 flutter analyze
 dart run build_runner build             # BẮT BUỘC sau khi sửa lib/core/db/tables.dart
 flutter build apk --release --target-platform android-arm64
@@ -89,9 +89,28 @@ danh tính đến từ nhãn chữ nên số lượng danh mục không bị gi�
 phải sao lưu riêng. Mất chúng thì không cài đè bản mới lên app đang dùng được
 nữa, buộc phải gỡ app — mất toàn bộ dữ liệu chi tiêu.
 
-## Chưa làm (theo kế hoạch)
+## Trả dùm
 
-Giao dịch định kỳ + nhắc nhở, ngân sách theo hạng mục, export/import JSON-CSV,
-màn hình trả dùm chuyên dụng (hiện phải ghi tay 2 giao dịch), bộ lọc danh sách.
-Các bảng `recurring_templates`, `budgets`, `settings_kv` đã tạo sẵn trong DB nên
-thêm những tính năng này không cần viết migration.
+Nằm trong luồng ghi Chi tiêu bằng một công tắc, không phải màn hình riêng, vì
+bản chất nó là một khoản chi. `Repository.addSplitBill` sinh ra một `expense`
+đúng bằng phần của mình cộng nhiều `lend` cho từng người, tất cả cùng một
+`groupId`.
+
+Đây là lý do cả thống kê lẫn ngân sách đều chỉ đếm `expense`: một bữa 200k chia
+bốn người làm ví trừ đủ 200k nhưng chỉ 50k vào chi tiêu, nên trả dùm không bao
+giờ làm vượt hạn mức oan. Chia lẻ thì phần dư dồn vào mình để tổng khớp hoá đơn.
+
+## Sao lưu
+
+`BackupService` xuất JSON đầy đủ (khôi phục được) và CSV phẳng (mở bằng Excel,
+**phải có BOM** nếu không tiếng Việt vỡ trên Windows).
+
+Khi nhập, id trong file được ánh xạ sang id mới chứ không dùng lại — chế độ gộp
+gần như chắc chắn đụng id. `dayKey`/`monthKey`/`debtDelta` tính lại từ dữ liệu
+gốc chứ không tin file, phòng bản sao lưu đến từ máy khác múi giờ. Toàn bộ chạy
+trong một `db.transaction()`.
+
+## Chưa làm
+
+Giao dịch định kỳ + nhắc nhở (bảng `recurring_templates` đã có sẵn), bộ lọc danh
+sách giao dịch, dark mode toggle thủ công, icon app riêng.
