@@ -50,3 +50,6 @@ app.*.map.json
 /android/key.properties
 /android/*.jks
 /android/*.keystore
+
+#Build files
+*.apk
