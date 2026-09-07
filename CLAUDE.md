@@ -83,6 +83,20 @@ Cơ cấu chi theo danh mục dùng **thanh ngang một tông, đậm dần**, k
 các lát bánh không còn phân biệt được, nhất là với người mù màu. Ở dạng thanh,
 danh tính đến từ nhãn chữ nên số lượng danh mục không bị giới hạn.
 
+## Tự động build
+
+`.github/workflows/ci.yml` chạy analyze + test mỗi lần push. Workflow
+`release.yml` build APK đã ký và tạo bản phát hành khi đẩy thẻ `v1.2.3`:
+
+```powershell
+git tag v1.0.1
+git push origin v1.0.1
+```
+
+Số phiên bản lấy từ tên thẻ qua `--build-name`, nên không phải sửa `pubspec.yaml`.
+Keystore nạp từ GitHub Secrets (xem `.github/README.md`), và có một bước chạy
+`apksigner` chặn lại nếu APK lỡ bị ký bằng debug key.
+
 ## Chữ ký release
 
 `android/moneybook-release.jks` + `android/key.properties` **không commit** nhưng
