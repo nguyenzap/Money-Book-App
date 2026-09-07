@@ -833,6 +833,28 @@ class Repository {
     });
   }
 
+  /// Tổng chi tiêu trong một ngày, gom theo danh mục có đặt hạn mức.
+  ///
+  /// Dùng ở màn Tổng quan để trả lời câu "hôm nay mình đã tiêu bao nhiêu rồi",
+  /// đối chiếu ngay với mức khuyến nghị mỗi ngày.
+  Stream<Map<int, int>> watchSpentByCategoryOnDay(int dayKey) {
+    return db.customSelect(
+      '''
+      SELECT category_id AS cid, SUM(amount) AS total
+      FROM transactions
+      WHERE deleted_at IS NULL
+        AND kind = 'expense'
+        AND day_key = ?
+        AND category_id IS NOT NULL
+      GROUP BY category_id
+      ''',
+      variables: [Variable.withInt(dayKey)],
+      readsFrom: {db.transactions},
+    ).watch().map((rows) => {
+          for (final row in rows) row.read<int>('cid'): row.read<int>('total'),
+        });
+  }
+
   /// Đặt hoặc cập nhật hạn mức cho một danh mục.
   ///
   /// [monthKey] null nghĩa là áp dụng cho mọi tháng.

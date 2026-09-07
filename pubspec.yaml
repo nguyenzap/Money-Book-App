@@ -26,6 +26,7 @@ dependencies:
   path: ^1.9.1
 
   # Format
+  characters: ^1.4.0
   intl: ^0.20.2
 
   # Notification

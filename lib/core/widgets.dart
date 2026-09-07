@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'format/money.dart';
+import 'format/names.dart';
 import 'icons.dart';
 import 'theme.dart';
 
@@ -163,7 +164,7 @@ class InitialAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final base = color ?? Theme.of(context).colorScheme.primary;
-    final initial = name.trim().isEmpty ? '?' : name.trim()[0].toUpperCase();
+    final initial = initialOf(name);
     return Container(
       width: size,
       height: size,

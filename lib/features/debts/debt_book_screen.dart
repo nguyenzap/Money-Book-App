@@ -93,7 +93,11 @@ class DebtBookScreen extends ConsumerWidget {
   }
 }
 
-/// Chênh lệch cuối cùng: gộp cả hai chiều lại thì mình đang dư hay đang thiếu.
+/// Gộp cả hai chiều lại thì cuối cùng mình đang dư hay đang thiếu.
+///
+/// Nói thẳng bằng câu chữ thay vì hiện một con số có dấu cộng trừ: "Chênh lệch
+/// +200.000" là cách nói của sổ kế toán, còn cái người ta muốn biết là rốt cuộc
+/// mình đang được nợ hay đang mắc nợ.
 class _NetCard extends StatelessWidget {
   const _NetCard({required this.theyOweTotal, required this.iOweTotal});
 
@@ -104,6 +108,7 @@ class _NetCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final net = theyOweTotal - iOweTotal;
     final scheme = Theme.of(context).colorScheme;
+    final settled = net == 0;
 
     return Card(
       color: scheme.surfaceContainerHigh,
@@ -112,28 +117,36 @@ class _NetCard extends StatelessWidget {
         child: Column(
           children: [
             Text(
-              'Chênh lệch',
+              settled
+                  ? 'Không ai nợ ai'
+                  : net > 0
+                      ? 'Bạn đang cho nợ'
+                      : 'Bạn đang nợ',
               style: TextStyle(color: scheme.outline, fontSize: 13),
             ),
             const SizedBox(height: 6),
             Text(
-              formatVndSigned(net),
+              settled ? '0 ₫' : formatVnd(net.abs()),
               style: TextStyle(
                 fontSize: 26,
                 fontWeight: FontWeight.bold,
-                color: amountColor(context, net),
+                color: settled
+                    ? scheme.onSurface
+                    : net > 0
+                        ? incomeColor(context)
+                        : expenseColor(context),
                 fontFeatures: const [FontFeature.tabularFigures()],
               ),
             ),
-            const SizedBox(height: 4),
-            Text(
-              net > 0
-                  ? 'Tổng lại thì bạn đang được nợ'
-                  : net < 0
-                      ? 'Tổng lại thì bạn đang nợ người khác'
-                      : 'Hai bên cân bằng',
-              style: TextStyle(color: scheme.outline, fontSize: 12.5),
-            ),
+            if (theyOweTotal > 0 && iOweTotal > 0) ...[
+              const SizedBox(height: 6),
+              Text(
+                'Đã trừ ${formatVnd(theyOweTotal)} người khác nợ bạn '
+                'với ${formatVnd(iOweTotal)} bạn nợ người khác',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: scheme.outline, fontSize: 12),
+              ),
+            ],
           ],
         ),
       ),

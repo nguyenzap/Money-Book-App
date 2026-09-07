@@ -66,6 +66,11 @@ int parseVnd(String text) {
 }
 
 /// Vừa gõ vừa tự chèn dấu chấm ngăn cách hàng nghìn.
+///
+/// Giữ con trỏ ở nguyên chỗ người dùng đang sửa. Nếu cứ đẩy con trỏ về cuối
+/// sau mỗi lần định dạng lại thì muốn xoá một chữ số ở giữa "13.000" là không
+/// thể: xoá xong con trỏ nhảy về cuối, lần xoá tiếp theo lại ăn nhầm chữ số
+/// khác.
 class ThousandsFormatter extends TextInputFormatter {
   const ThousandsFormatter();
 
@@ -83,10 +88,45 @@ class ThousandsFormatter extends TextInputFormatter {
     // Chặn số quá lớn để khỏi tràn khi tính tổng.
     if (digits.length > 15) return oldValue;
 
+    // Neo con trỏ theo số chữ số đứng trước nó, vì dấu chấm có thể được thêm
+    // hoặc bớt khi định dạng lại.
+    final caret = newValue.selection.baseOffset;
+    final digitsBeforeCaret = caret < 0
+        ? digits.length
+        : _countDigits(newValue.text, caret);
+
     final formatted = groupDigits(int.parse(digits));
+
     return TextEditingValue(
       text: formatted,
-      selection: TextSelection.collapsed(offset: formatted.length),
+      selection: TextSelection.collapsed(
+        offset: _offsetAfterDigits(formatted, digitsBeforeCaret),
+      ),
     );
   }
+
+  /// Đếm số chữ số nằm trong [end] ký tự đầu của [text].
+  int _countDigits(String text, int end) {
+    final limit = end.clamp(0, text.length);
+    var count = 0;
+    for (var i = 0; i < limit; i++) {
+      if (_isDigit(text.codeUnitAt(i))) count++;
+    }
+    return count;
+  }
+
+  /// Vị trí ngay sau chữ số thứ [digitCount] trong chuỗi đã định dạng.
+  int _offsetAfterDigits(String formatted, int digitCount) {
+    if (digitCount <= 0) return 0;
+    var seen = 0;
+    for (var i = 0; i < formatted.length; i++) {
+      if (_isDigit(formatted.codeUnitAt(i))) {
+        seen++;
+        if (seen == digitCount) return i + 1;
+      }
+    }
+    return formatted.length;
+  }
+
+  bool _isDigit(int codeUnit) => codeUnit >= 0x30 && codeUnit <= 0x39;
 }

@@ -10,6 +10,7 @@ import '../../core/providers.dart';
 import '../../core/theme.dart';
 import '../../core/widgets.dart';
 import '../settings/settings_screen.dart';
+import 'budget_today_section.dart';
 import '../transactions/tx_editor_screen.dart';
 import '../transactions/tx_tile.dart';
 import '../wallets/wallet_detail_screen.dart';
@@ -40,7 +41,11 @@ class DashboardScreen extends ConsumerWidget {
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
         children: const [
           _TotalAssetsCard(),
-          SizedBox(height: 16),
+          SizedBox(height: 20),
+          // Ngân sách nằm ngay dưới tổng tài sản: đây là con số quyết định
+          // bữa trưa hôm nay, không phải thứ phải đi tìm trong Cài đặt.
+          BudgetTodaySection(),
+          SizedBox(height: 20),
           _MonthSummaryCard(),
           SizedBox(height: 20),
           _WalletsSection(),
@@ -137,10 +142,13 @@ class _MonthSummaryCard extends ConsumerWidget {
                     ),
                   ),
                   Expanded(
+                    // Thay cho "Còn lại" (Thu trừ Chi): với người chưa ghi thu
+                    // nhập thì con số đó chỉ là ô "Chi" lặp lại kèm dấu trừ.
+                    // Chi mỗi ngày nói lên nhịp độ, thứ thực sự dùng được.
                     child: _MiniStat(
-                      label: 'Còn lại',
-                      value: t.net,
-                      color: amountColor(context, t.net),
+                      label: 'Chi/ngày',
+                      value: _dailyAverage(t.expense),
+                      color: Theme.of(context).colorScheme.onSurface,
                     ),
                   ),
                 ],
@@ -151,6 +159,13 @@ class _MonthSummaryCard extends ConsumerWidget {
       ),
     );
   }
+}
+
+/// Chi trung bình mỗi ngày tính trên số ngày đã trôi qua của tháng.
+int _dailyAverage(int monthExpense) {
+  final elapsed = daysElapsedIn(currentMonthKey());
+  if (elapsed <= 0) return 0;
+  return monthExpense ~/ elapsed;
 }
 
 class _MiniStat extends StatelessWidget {

@@ -9,11 +9,6 @@ import '../../core/providers.dart';
 import '../../core/theme.dart';
 import '../../core/widgets.dart';
 
-final budgetsProvider =
-    StreamProvider.family<List<BudgetProgress>, int>((ref, monthKey) {
-  return ref.watch(repositoryProvider).watchBudgets(monthKey);
-});
-
 /// Hạn mức chi tiêu theo từng danh mục, kèm tiến độ trong tháng.
 class BudgetScreen extends ConsumerWidget {
   const BudgetScreen({super.key});

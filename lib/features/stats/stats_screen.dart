@@ -31,7 +31,19 @@ class StatsScreen extends ConsumerWidget {
     final monthKey = ref.watch(selectedMonthProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Thống kê')),
+      appBar: AppBar(
+        title: const Text('Thống kê'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.savings_outlined),
+            tooltip: 'Ngân sách',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const BudgetScreen()),
+            ),
+          ),
+        ],
+      ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
         children: [

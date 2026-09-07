@@ -86,3 +86,21 @@ final personNetDebtProvider =
     StreamProvider.family<int, int>((ref, personId) {
   return ref.watch(repositoryProvider).watchNetDebt(personId);
 });
+
+/// Tiến độ các hạn mức ngân sách của một tháng.
+final budgetsProvider =
+    StreamProvider.family<List<BudgetProgress>, int>((ref, monthKey) {
+  return ref.watch(repositoryProvider).watchBudgets(monthKey);
+});
+
+/// Ngân sách tháng hiện tại, dùng ở màn Tổng quan.
+final currentBudgetsProvider = StreamProvider<List<BudgetProgress>>((ref) {
+  return ref.watch(repositoryProvider).watchBudgets(currentMonthKey());
+});
+
+/// Số tiền đã chi hôm nay, gom theo danh mục.
+final todaySpendingProvider = StreamProvider<Map<int, int>>((ref) {
+  return ref
+      .watch(repositoryProvider)
+      .watchSpentByCategoryOnDay(dayKeyOf(DateTime.now()));
+});
