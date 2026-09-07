@@ -191,6 +191,85 @@ void main() {
     });
   });
 
+  group('tiêu lố hôm nay thì mức ngày mai tự giảm', () {
+    test('lố 26k thì phần lố rải đều cho những ngày còn lại', () {
+      // Ngân sách 3tr, tháng 30 ngày, mức đều 100k/ngày.
+      // Ngày mùng 1 tiêu 126k, tức lố 26k.
+      final day1 = makeProgress(limit: 3000000, spent: 126000, daysElapsed: 1);
+
+      expect(day1.dailyAllowance, 100000, reason: 'mức đều ban đầu');
+      expect(day1.budgetForToday(126000), 100000,
+          reason: 'mốc của chính hôm nay không đổi');
+      expect(day1.remaining, 2874000);
+
+      // Mức cho những ngày sau: 2.874.000 chia 29 ngày.
+      expect(day1.remainingDailyAllowance, 99103);
+      expect(day1.remainingDailyAllowance < day1.dailyAllowance, isTrue,
+          reason: 'lố hôm nay thì mức những ngày sau phải thấp đi');
+
+      // 26k lố được chia đều cho 29 ngày chứ không bắt nhịn hết trong một hôm.
+      expect(100000 - day1.remainingDailyAllowance, 897);
+    });
+
+    test('sang ngày hôm sau, mốc của ngày đó đúng bằng mức đã hạ', () {
+      // Vẫn ngân sách 3tr, đã tiêu 126k, giờ là ngày mùng 2 và chưa tiêu gì.
+      final day2 = makeProgress(limit: 3000000, spent: 126000, daysElapsed: 2);
+
+      expect(day2.daysRemaining, 28);
+      // 2.874.000 chia 29 ngày (28 ngày còn lại cộng chính hôm nay).
+      expect(day2.budgetForToday(0), 99103,
+          reason: 'mốc hôm nay khớp với mức đã hạ từ hôm qua');
+    });
+
+    test('tiêu đúng mức đã hạ thì mức không tụt thêm', () {
+      // Ngày 2 tiêu đúng 99.103 -> tổng 225.103.
+      final day3 = makeProgress(limit: 3000000, spent: 225103, daysElapsed: 3);
+      expect(day3.budgetForToday(0), 99103,
+          reason: 'bám đúng mức mới thì giữ nguyên, không trượt dốc');
+    });
+
+    test('lố đều đặn nhiều ngày thì mức tụt rõ rệt', () {
+      // Mỗi ngày tiêu 150k thay vì 100k, qua 10 ngày.
+      final b = makeProgress(limit: 3000000, spent: 1500000, daysElapsed: 10);
+
+      expect(b.remainingDailyAllowance, 75000,
+          reason: 'hạ hẳn từ 100k xuống 75k');
+      expect(b.pace, BudgetPace.fast);
+      expect(b.needsAttention, isTrue,
+          reason: 'lố một hôm thì im, lố đều thì phải lên tiếng');
+    });
+
+    test('tiết kiệm hôm nay thì mức ngày mai nới ra', () {
+      // Ngày mùng 1 chỉ tiêu 50k thay vì 100k.
+      final b = makeProgress(limit: 3000000, spent: 50000, daysElapsed: 1);
+
+      expect(b.remainingDailyAllowance, 101724);
+      expect(b.remainingDailyAllowance > b.dailyAllowance, isTrue,
+          reason: 'dành dụm được thì những ngày sau rộng tay hơn');
+    });
+
+    test('lố nặng tới mức hết sạch thì mức về 0', () {
+      final b = makeProgress(limit: 3000000, spent: 3000000, daysElapsed: 5);
+      expect(b.remainingDailyAllowance, 0);
+      expect(b.budgetForToday(0), 0);
+    });
+
+    test('tổng các mức còn lại luôn khớp số tiền còn lại', () {
+      // Bất biến quan trọng: chia thế nào thì cộng lại cũng không vượt quá
+      // số tiền thật sự còn.
+      for (final spent in [0, 126000, 500000, 1500000, 2900000]) {
+        final b = makeProgress(
+          limit: 3000000,
+          spent: spent,
+          daysElapsed: 10,
+        );
+        final projected = b.remainingDailyAllowance * b.daysRemaining;
+        expect(projected <= b.remaining, isTrue,
+            reason: 'với spent=$spent: $projected phải <= ${b.remaining}');
+      }
+    });
+  });
+
   group('dự báo', () {
     test('giữ nhịp này thì cuối tháng tiêu hết bao nhiêu', () {
       // 150k mỗi ngày qua 4 ngày, cả tháng 30 ngày sẽ là 4.5tr.
