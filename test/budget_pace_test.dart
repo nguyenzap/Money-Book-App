@@ -113,6 +113,84 @@ void main() {
     });
   });
 
+  group('mức nên tiêu hôm nay', () {
+    test('ngân sách 2tr, đã tiêu 155k, hôm nay tiêu 108k', () {
+      // Số liệu thật người dùng gặp: app từng hiện mốc 188.22k, cao hơn cả
+      // số vừa tiêu, nên không bao giờ báo vượt.
+      final b = makeProgress(
+        limit: 2000000,
+        spent: 155000,
+        daysElapsed: 7,
+      );
+
+      expect(b.remaining, 1845000);
+      expect(b.daysRemaining, 23);
+
+      // Tiền còn lại đã trừ 108k của hôm nay, nên phải cộng lại rồi chia cho
+      // 24 ngày (23 ngày còn lại cộng hôm nay).
+      expect(b.budgetForToday(108000), 81375);
+      expect(b.budgetForToday(108000) < 108000, isTrue,
+          reason: 'tiêu 108k mà mốc chỉ 81k thì phải bị coi là vượt');
+    });
+
+    test('mốc hôm nay KHÔNG tăng theo số đã tiêu', () {
+      // Đây là lỗi cũ: mốc = mức còn lại + đã tiêu hôm nay, nên càng tiêu
+      // nhiều mốc càng cao và không bao giờ báo vượt được.
+      //
+      // Tiêu hôm nay làm `spent` tăng và `remaining` giảm đúng bằng đó, nên
+      // khi cộng lại `spentToday` thì hai vế triệt tiêu — mốc giữ nguyên.
+      final quiet = makeProgress(limit: 3000000, spent: 0, daysElapsed: 1)
+          .budgetForToday(0);
+      final splurged =
+          makeProgress(limit: 3000000, spent: 500000, daysElapsed: 1)
+              .budgetForToday(500000);
+
+      expect(quiet, 100000);
+      expect(splurged, quiet,
+          reason: 'tiêu bao nhiêu thì mốc của hôm nay vẫn thế');
+    });
+
+    test('chưa tiêu gì hôm nay thì mốc là phần chia đều còn lại', () {
+      // Ngân sách 3tr, tháng 30 ngày, ngày mùng 1, chưa tiêu gì.
+      final b = makeProgress(limit: 3000000, spent: 0, daysElapsed: 1);
+      expect(b.daysRemaining, 29);
+      expect(b.budgetForToday(0), 100000, reason: '3tr chia đều 30 ngày');
+    });
+
+    test('tiêu lố hôm qua thì mốc hôm nay thấp xuống', () {
+      // Ngân sách 3tr, qua 10 ngày đã tiêu 1.5tr (đáng lẽ chỉ 1tr).
+      final b = makeProgress(limit: 3000000, spent: 1500000, daysElapsed: 10);
+      expect(b.budgetForToday(0), 71428,
+          reason: '1.5tr còn lại chia 21 ngày, thấp hơn mức 100k ban đầu');
+    });
+
+    test('tiết kiệm được thì mốc hôm nay rộng hơn', () {
+      final b = makeProgress(limit: 3000000, spent: 500000, daysElapsed: 10);
+      expect(b.budgetForToday(0), 119047,
+          reason: '2.5tr còn lại chia 21 ngày, cao hơn mức 100k ban đầu');
+    });
+
+    test('hết sạch hạn mức thì mốc bằng 0', () {
+      final b = makeProgress(limit: 3000000, spent: 3200000, daysElapsed: 20);
+      expect(b.budgetForToday(0), 0);
+    });
+
+    test('ngày cuối tháng vẫn chia được cho chính hôm đó', () {
+      final b = makeProgress(limit: 3000000, spent: 2900000, daysElapsed: 30);
+      expect(b.daysRemaining, 0);
+      expect(b.budgetForToday(0), 100000,
+          reason: 'toàn bộ phần còn lại dồn cho ngày cuối');
+    });
+
+    test('mốc hôm nay và mức những ngày sau là hai con số khác nhau', () {
+      // Sau khi đã tiêu hôm nay, mức cho các ngày sau phải thấp hơn mốc hôm
+      // nay nếu hôm nay tiêu lố.
+      final b = makeProgress(limit: 2000000, spent: 155000, daysElapsed: 7);
+      expect(b.budgetForToday(108000), 81375);
+      expect(b.remainingDailyAllowance, 80217);
+    });
+  });
+
   group('dự báo', () {
     test('giữ nhịp này thì cuối tháng tiêu hết bao nhiêu', () {
       // 150k mỗi ngày qua 4 ngày, cả tháng 30 ngày sẽ là 4.5tr.

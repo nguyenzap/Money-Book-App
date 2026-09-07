@@ -94,12 +94,11 @@ class _BudgetTodayRow extends StatelessWidget {
     final color =
         progress.colorValue == null ? null : Color(progress.colorValue!);
 
-    // Mức nên tiêu hôm nay: chia đều số tiền còn lại cho số ngày còn lại, chứ
-    // không phải mức trung bình cả tháng. Tiêu lố hôm qua thì hôm nay mức này
-    // tự thấp xuống — đúng thứ cần biết để tự điều chỉnh.
-    final target = progress.daysRemaining > 0 && progress.remaining > 0
-        ? progress.remainingDailyAllowance + spentToday
-        : progress.dailyAllowance;
+    // Mức nên tiêu hôm nay, tính từ tiền còn lại chia cho số ngày còn lại kể
+    // cả hôm nay. Tiêu lố hôm qua thì mốc này tự thấp xuống — đúng thứ cần
+    // biết để tự điều chỉnh. Mốc không đổi theo số đã tiêu trong ngày, nếu
+    // không thì càng tiêu nhiều mốc càng cao và chẳng bao giờ báo vượt.
+    final target = progress.budgetForToday(spentToday);
     final overToday = target > 0 && spentToday > target;
     final barValue = target <= 0
         ? 1.0
@@ -158,6 +157,18 @@ class _BudgetTodayRow extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 6),
+            if (overToday) ...[
+              Text(
+                'Hôm nay vượt mốc ${formatVnd(spentToday - target)}. '
+                'Bớt lại những ngày sau để cả tháng vẫn đủ.',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: expenseColor(context),
+                ),
+              ),
+              const SizedBox(height: 4),
+            ],
             Text(
               _detail(context),
               style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
@@ -169,6 +180,7 @@ class _BudgetTodayRow extends StatelessWidget {
   }
 
   String _detail(BuildContext context) {
+    // Dùng lại đúng con số mốc đã hiện ở trên để hai chỗ không nói vênh nhau.
     if (progress.isOver) {
       return 'Đã vượt hạn mức tháng ${formatVnd(-progress.remaining)}';
     }

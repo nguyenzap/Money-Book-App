@@ -993,7 +993,23 @@ class BudgetProgress {
   /// Tiêu quá mức đáng lẽ bao nhiêu. Âm nghĩa là đang tiêu tiết kiệm.
   int get paceDelta => spent - expectedByNow;
 
-  /// Còn bao nhiêu tiền mỗi ngày cho những ngày còn lại.
+  /// Mức nên tiêu trong HÔM NAY.
+  ///
+  /// Phải cộng lại phần đã tiêu hôm nay rồi mới chia, vì [remaining] đã trừ nó
+  /// đi rồi còn [daysRemaining] lại không đếm hôm nay — lấy tiền của những ngày
+  /// sau đem chia cho hôm nay thì sai cả tử lẫn mẫu.
+  ///
+  /// Tuyệt đối không cộng thêm số đã tiêu hôm nay vào kết quả này để làm mốc so
+  /// sánh: làm vậy thì càng tiêu nhiều mốc càng cao và không bao giờ báo vượt.
+  int budgetForToday(int spentToday) {
+    final daysLeftIncludingToday = daysRemaining + 1;
+    if (daysLeftIncludingToday <= 0) return 0;
+    final pot = remaining + spentToday;
+    if (pot <= 0) return 0;
+    return pot ~/ daysLeftIncludingToday;
+  }
+
+  /// Còn bao nhiêu tiền mỗi ngày cho những ngày CÒN LẠI, không tính hôm nay.
   ///
   /// Đây là con số hữu ích nhất: hôm nay lỡ tay thì ngày mai biết phải rút
   /// xuống bao nhiêu để cả tháng vẫn nằm trong hạn mức.
