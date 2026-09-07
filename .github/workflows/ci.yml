@@ -1,0 +1,44 @@
+# Chạy mỗi lần push hoặc mở pull request: phân tích tĩnh và chạy toàn bộ test.
+#
+# Không build APK ở đây cho nhanh — việc đó để dành cho workflow release.
+name: Kiểm tra
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Phân tích và chạy test
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.41.2
+          channel: stable
+          cache: true
+
+      - name: Tải thư viện
+        run: flutter pub get
+
+      # database.g.dart có trong git, nhưng sinh lại rồi so sánh sẽ bắt được
+      # trường hợp sửa tables.dart mà quên chạy build_runner — lỗi này nếu lọt
+      # ra thì app chạy sai mà không báo gì.
+      - name: Kiểm tra mã sinh tự động còn khớp
+        run: |
+          dart run build_runner build --delete-conflicting-outputs
+          if ! git diff --exit-code --stat; then
+            echo "::error::Mã sinh tự động đã cũ. Chạy 'dart run build_runner build' rồi commit lại."
+            exit 1
+          fi
+
+      - name: Phân tích tĩnh
+        run: flutter analyze
+
+      - name: Chạy test
+        run: flutter test

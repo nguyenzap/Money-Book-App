@@ -1,0 +1,124 @@
+# Build APK đã ký và tạo bản phát hành trên GitHub.
+#
+# Chạy khi đẩy lên một thẻ dạng v1.2.3, hoặc bấm tay ở tab Actions.
+#
+# APK BẮT BUỘC phải ký bằng đúng keystore đang dùng, nếu không điện thoại sẽ từ
+# chối cài đè và người dùng phải gỡ app — mất toàn bộ dữ liệu chi tiêu. Keystore
+# không nằm trong repo mà được nạp từ GitHub Secrets.
+name: Phát hành
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Số phiên bản, ví dụ v1.0.1'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build và phát hành APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.41.2
+          channel: stable
+          cache: true
+
+      - name: Tải thư viện
+        run: flutter pub get
+
+      - name: Chạy test
+        # Không phát hành bản chưa qua được test.
+        run: flutter test
+
+      - name: Khôi phục keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.KEYSTORE_STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEYSTORE_KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEYSTORE_KEY_ALIAS }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::error::Thiếu secret KEYSTORE_BASE64. Xem hướng dẫn trong .github/README.md"
+            exit 1
+          fi
+          echo "$KEYSTORE_BASE64" | base64 -d > android/moneybook-release.jks
+          cat > android/key.properties <<EOF
+          storePassword=$STORE_PASSWORD
+          keyPassword=$KEY_PASSWORD
+          keyAlias=$KEY_ALIAS
+          storeFile=moneybook-release.jks
+          EOF
+
+      - name: Xác định số phiên bản
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ inputs.version }}"
+          else
+            VERSION="${GITHUB_REF#refs/tags/}"
+          fi
+          echo "tag=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "name=${VERSION#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Build APK
+        # Chỉ build arm64: mọi điện thoại Android đời gần đây đều dùng kiến
+        # trúc này, và bản gộp cả ba kiến trúc nặng gấp hơn hai lần.
+        run: |
+          flutter build apk --release \
+            --target-platform android-arm64 \
+            --build-name "${{ steps.version.outputs.name }}" \
+            --build-number "${{ github.run_number }}"
+
+      - name: Đổi tên file cho dễ nhận
+        run: |
+          cp build/app/outputs/flutter-apk/app-release.apk \
+             QuanLyChiTieu-${{ steps.version.outputs.tag }}.apk
+
+      - name: Kiểm tra chữ ký
+        # Nếu bước khôi phục keystore hỏng thì Gradle lặng lẽ ký bằng debug key,
+        # và bản đó không cài đè được. Chặn lại ngay ở đây.
+        run: |
+          # -type f -perm -u+x để khỏi bắt nhầm lib/apksigner.jar nằm cùng thư mục.
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f -perm -u+x | sort -r | head -1)
+          if [ -z "$APKSIGNER" ]; then
+            echo "::error::Không tìm thấy apksigner trong $ANDROID_HOME/build-tools"
+            exit 1
+          fi
+          echo "Dùng $APKSIGNER"
+          OUT=$("$APKSIGNER" verify --print-certs \
+                QuanLyChiTieu-${{ steps.version.outputs.tag }}.apk)
+          echo "$OUT"
+          if echo "$OUT" | grep -qi "CN=Android Debug"; then
+            echo "::error::APK đang bị ký bằng debug key, không cài đè được lên bản đang dùng."
+            exit 1
+          fi
+
+      - name: Dọn keystore
+        if: always()
+        run: rm -f android/moneybook-release.jks android/key.properties
+
+      - name: Tạo bản phát hành
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: ${{ steps.version.outputs.tag }}
+          files: QuanLyChiTieu-${{ steps.version.outputs.tag }}.apk
+          generate_release_notes: true
+          body: |
+            Tải file `.apk` bên dưới về điện thoại rồi mở ra cài.
+
+            Cài đè lên bản cũ được, dữ liệu chi tiêu giữ nguyên — APK này ký
+            bằng đúng chữ ký của các bản trước.
+
+            Trước khi cập nhật nên vào **Cài đặt → Sao lưu → Sao lưu đầy đủ**
+            và gửi file JSON cho chính mình, phòng khi cần khôi phục.
