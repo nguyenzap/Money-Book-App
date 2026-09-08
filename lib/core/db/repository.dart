@@ -1009,6 +1009,23 @@ class BudgetProgress {
     return pot ~/ daysLeftIncludingToday;
   }
 
+  /// Hôm nay còn tiêu được bao nhiêu nữa.
+  ///
+  /// Đây là con số dùng để quyết định: đứng trước quầy nước thì cái cần biết là
+  /// còn bao nhiêu, chứ không phải đã tiêu bao nhiêu. Âm nghĩa là đã lố.
+  int leftForToday(int spentToday) => budgetForToday(spentToday) - spentToday;
+
+  /// Phần đã dùng của hạn mức hôm nay, từ 0 tới 1.
+  ///
+  /// Dùng để vẽ thanh vơi dần: 1 là còn nguyên, 0 là hết sạch.
+  double remainingRatioToday(int spentToday) {
+    final target = budgetForToday(spentToday);
+    if (target <= 0) return 0;
+    final left = leftForToday(spentToday);
+    if (left <= 0) return 0;
+    return (left / target).clamp(0.0, 1.0);
+  }
+
   /// Còn bao nhiêu tiền mỗi ngày cho những ngày CÒN LẠI, không tính hôm nay.
   ///
   /// Đây là con số hữu ích nhất: hôm nay lỡ tay thì ngày mai biết phải rút
