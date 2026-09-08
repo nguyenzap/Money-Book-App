@@ -99,11 +99,16 @@ class _BudgetTodayRow extends StatelessWidget {
     // biết để tự điều chỉnh. Mốc không đổi theo số đã tiêu trong ngày, nếu
     // không thì càng tiêu nhiều mốc càng cao và chẳng bao giờ báo vượt.
     final target = progress.budgetForToday(spentToday);
-    final overToday = target > 0 && spentToday > target;
-    final barValue = target <= 0
-        ? 1.0
-        : (spentToday / target).clamp(0.0, 1.0).toDouble();
-    final barColor = overToday ? expenseColor(context) : scheme.primary;
+    final left = progress.leftForToday(spentToday);
+    final overToday = left < 0;
+    // Thanh vơi dần chứ không đầy dần: tiền đang hết đi thì thanh phải ngắn
+    // lại, nhìn là hiểu ngay mà không cần đọc số.
+    final barValue = progress.remainingRatioToday(spentToday);
+    final barColor = overToday
+        ? expenseColor(context)
+        : progress.isOver
+            ? expenseColor(context)
+            : scheme.primary;
 
     return InkWell(
       onTap: () => showBudgetEditor(context, editing: progress),
@@ -130,8 +135,13 @@ class _BudgetTodayRow extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
+                // Số nổi bật là số CÒN LẠI, vì đó là con số dùng để quyết
+                // định có mua hay không. Đã tiêu bao nhiêu chỉ là chuyện đã
+                // rồi, để ở dòng phụ bên dưới.
                 Text(
-                  formatVnd(spentToday),
+                  overToday
+                      ? '-${formatVnd(-left)}'
+                      : formatVnd(left),
                   style: TextStyle(
                     fontSize: 14.5,
                     fontWeight: FontWeight.bold,
@@ -159,13 +169,19 @@ class _BudgetTodayRow extends StatelessWidget {
             const SizedBox(height: 6),
             if (overToday) ...[
               Text(
-                'Hôm nay vượt mốc ${formatVnd(spentToday - target)}. '
+                'Hôm nay lố ${formatVnd(-left)}. '
                 'Bớt lại những ngày sau để cả tháng vẫn đủ.',
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w500,
                   color: expenseColor(context),
                 ),
+              ),
+              const SizedBox(height: 4),
+            ] else if (spentToday > 0) ...[
+              Text(
+                'Đã tiêu ${formatVnd(spentToday)} hôm nay',
+                style: TextStyle(fontSize: 12, color: scheme.outline),
               ),
               const SizedBox(height: 4),
             ],

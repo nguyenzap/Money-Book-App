@@ -270,6 +270,74 @@ void main() {
     });
   });
 
+  group('hôm nay còn tiêu được bao nhiêu', () {
+    test('ví dụ 80k: mua ly nước 20k thì còn 60k', () {
+      // Ngân sách 2.4tr cho tháng 30 ngày -> mốc mỗi ngày 80k.
+      final b = makeProgress(limit: 2400000, spent: 20000, daysElapsed: 1);
+
+      expect(b.budgetForToday(20000), 80000, reason: 'mốc hôm nay');
+      expect(b.leftForToday(20000), 60000, reason: 'còn tiêu được 60k');
+    });
+
+    test('chưa tiêu gì thì còn nguyên cả mốc', () {
+      final b = makeProgress(limit: 2400000, spent: 0, daysElapsed: 1);
+      expect(b.leftForToday(0), 80000);
+      expect(b.remainingRatioToday(0), 1.0, reason: 'thanh còn đầy');
+    });
+
+    test('tiêu hết sạch thì còn 0 và thanh cạn', () {
+      final b = makeProgress(limit: 2400000, spent: 80000, daysElapsed: 1);
+      expect(b.leftForToday(80000), 0);
+      expect(b.remainingRatioToday(80000), 0.0);
+    });
+
+    test('tiêu lố thì còn lại là số âm', () {
+      // Mốc 80k mà tiêu 108k -> lố 28k.
+      final b = makeProgress(limit: 2400000, spent: 108000, daysElapsed: 1);
+      expect(b.budgetForToday(108000), 80000);
+      expect(b.leftForToday(108000), -28000);
+      expect(b.remainingRatioToday(108000), 0.0,
+          reason: 'lố thì thanh cạn hẳn, không âm');
+    });
+
+    test('thanh vơi dần theo đúng tỉ lệ đã tiêu', () {
+      final b = makeProgress(limit: 2400000, spent: 20000, daysElapsed: 1);
+      // Tiêu 20k trên mốc 80k -> còn 3/4.
+      expect(b.remainingRatioToday(20000), 0.75);
+    });
+
+    test('còn lại cộng đã tiêu luôn bằng đúng mốc', () {
+      // Bất biến: hai con số hiện trên màn hình phải cộng lại ra mốc, nếu
+      // không thì người dùng đọc thấy vênh.
+      for (final spentToday in [0, 20000, 50000, 80000]) {
+        final b = makeProgress(
+          limit: 2400000,
+          spent: spentToday,
+          daysElapsed: 1,
+        );
+        expect(
+          b.leftForToday(spentToday) + spentToday,
+          b.budgetForToday(spentToday),
+          reason: 'với spentToday=$spentToday',
+        );
+      }
+    });
+
+    test('hết hạn mức tháng thì hôm nay không còn gì', () {
+      final b = makeProgress(limit: 2400000, spent: 2400000, daysElapsed: 10);
+      expect(b.budgetForToday(0), 0);
+      expect(b.leftForToday(0), 0);
+      expect(b.remainingRatioToday(0), 0.0);
+    });
+
+    test('tiêu tiết kiệm mấy hôm trước thì hôm nay rộng hơn 80k', () {
+      // Ngân sách 2.4tr, qua 10 ngày mới tiêu 400k (đáng lẽ 800k).
+      final b = makeProgress(limit: 2400000, spent: 400000, daysElapsed: 10);
+      expect(b.budgetForToday(0), 95238, reason: '2tr chia 21 ngày');
+      expect(b.leftForToday(0), 95238);
+    });
+  });
+
   group('dự báo', () {
     test('giữ nhịp này thì cuối tháng tiêu hết bao nhiêu', () {
       // 150k mỗi ngày qua 4 ngày, cả tháng 30 ngày sẽ là 4.5tr.
