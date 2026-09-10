@@ -7,7 +7,7 @@ trong máy, không server, không tài khoản.
 
 ```powershell
 flutter run -d <device>                 # dev, hot reload bằng phím r
-flutter test                            # 182 test, chạy trong ~2 giây
+flutter test                            # 214 test, chạy trong ~2 giây
 flutter analyze
 dart run build_runner build             # BẮT BUỘC sau khi sửa lib/core/db/tables.dart
 flutter build apk --release --target-platform android-arm64
@@ -113,6 +113,21 @@ bản chất nó là một khoản chi. `Repository.addSplitBill` sinh ra một 
 Đây là lý do cả thống kê lẫn ngân sách đều chỉ đếm `expense`: một bữa 200k chia
 bốn người làm ví trừ đủ 200k nhưng chỉ 50k vào chi tiêu, nên trả dùm không bao
 giờ làm vượt hạn mức oan. Chia lẻ thì phần dư dồn vào mình để tổng khớp hoá đơn.
+
+## Quỹ
+
+Tiền đã dành sẵn cho khoản biết trước. **Không phải ví ảo** mà là nhãn dán lên
+tiền đang nằm trong ví thật — người dùng chuyển tiền sang một ngân hàng ít dùng
+cho khỏi tiêu nhầm, nên số dư ví phải luôn khớp với app ngân hàng.
+
+Không có loại giao dịch riêng: nạp quỹ là `transfer` có `fund_id`, chi từ quỹ là
+`expense` có `fund_id`. Công thức số dư ví vì thế không phải rẽ nhánh thêm.
+
+Chiều tiền của quỹ xét theo **ví đang giữ quỹ** (`funds.wallet_id`), không phải
+theo "chân ví nào khác null" — nạp quỹ có cả hai chân nên cách sau làm hai vế
+triệt tiêu và quỹ luôn bằng 0. Dùng chung biểu thức `Repository._fundSavedExpr`.
+
+Tiền quỹ trừ khỏi `watchSpendableAssets` nhưng vẫn trong `watchTotalAssets`.
 
 ## Sao lưu
 
