@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../backup/backup_screen.dart';
 import '../budgets/budget_screen.dart';
+import '../funds/fund_screen.dart';
 import '../categories/category_list_screen.dart';
 import '../people/person_list_screen.dart';
 import '../wallets/wallet_list_screen.dart';
@@ -45,6 +46,16 @@ class SettingsScreen extends ConsumerWidget {
             onTap: () => Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => const PersonListScreen()),
+            ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.account_balance_outlined),
+            title: const Text('Quỹ'),
+            subtitle: const Text('Tiền để dành cho khoản đã biết trước'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const FundScreen()),
             ),
           ),
           ListTile(

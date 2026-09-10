@@ -135,6 +135,16 @@ class Transactions extends Table {
   IntColumn get recurringId =>
       integer().nullable().references(RecurringTemplates, #id)();
 
+  /// Quỹ mà giao dịch này nạp vào hoặc lấy ra.
+  ///
+  /// Không phải một loại giao dịch riêng: nạp quỹ là một [TxKind.transfer] có
+  /// gắn quỹ, chi từ quỹ là một [TxKind.expense] có gắn quỹ. Nhờ vậy công thức
+  /// tính số dư ví không phải rẽ nhánh thêm lần nào nữa.
+  ///
+  /// Chiều tiền của quỹ suy ra từ chân ví giống hệt cách làm với số dư: giao
+  /// dịch đưa tiền vào ví giữ quỹ thì quỹ tăng, lấy tiền ra thì quỹ giảm.
+  IntColumn get fundId => integer().nullable().references(Funds, #id)();
+
   /// Tất toán không có dòng tiền (xoá nợ, cho luôn). Khi đó không ví nào bị
   /// đụng tới, nhưng công nợ vẫn về 0.
   BoolColumn get isWriteoff => boolean().withDefault(const Constant(false))();
@@ -167,4 +177,38 @@ class SettingsKv extends Table {
 
   @override
   Set<Column> get primaryKey => {key};
+}
+
+/// Quỹ: tiền đã dành sẵn cho một khoản chi đã biết trước.
+///
+/// Tiền quỹ KHÔNG nằm ở đâu khác ngoài các ví thật — thường là một ngân hàng ít
+/// dùng, chuyển sang đó cho khỏi tiêu nhầm. Quỹ chỉ là lời hứa "phần này không
+/// được đụng", nên số dư ví vẫn luôn khớp với app ngân hàng.
+///
+/// Vì vậy tiền quỹ bị trừ khỏi "tiền tiêu được" nhưng vẫn nằm trong tổng tài
+/// sản đầy đủ: nó là tiền của mình, chỉ là đã có chỗ đến.
+@DataClassName('Fund')
+class Funds extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get name => text().withLength(min: 1, max: 60)();
+
+  /// Ví đang giữ tiền của quỹ này. Xoá ví thì quỹ mất chỗ neo nên chặn lại.
+  IntColumn get walletId => integer().references(Wallets, #id)();
+
+  /// Số tiền mục tiêu, hoặc null nếu chỉ để dành mà không có đích cụ thể.
+  IntColumn get targetAmount => integer().nullable()();
+
+  /// Hạn cần dùng tới, dạng yyyymmdd. Dùng để nhắc và để sắp xếp.
+  IntColumn get dueDayKey => integer().nullable()();
+
+  TextColumn get note => text().nullable()();
+  TextColumn get iconKey => text().nullable()();
+  IntColumn get colorValue => integer().nullable()();
+
+  /// Quỹ đã dùng xong nhưng giữ lại để xem lịch sử.
+  BoolColumn get isArchived => boolean().withDefault(const Constant(false))();
+
+  IntColumn get sortOrder => integer().withDefault(const Constant(0))();
+  IntColumn get createdAt => integer()();
+  IntColumn get updatedAt => integer()();
 }

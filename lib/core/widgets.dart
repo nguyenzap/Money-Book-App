@@ -50,13 +50,24 @@ class AmountField extends StatelessWidget {
   final bool showQuickAdd;
   final ValueChanged<int>? onChanged;
 
-  void _add(int delta) {
-    final current = parseVnd(controller.text);
-    final next = current + delta;
-    controller.text = groupDigits(next);
+  void _setValue(int next) {
+    controller.text = next == 0 ? '' : groupDigits(next);
     controller.selection =
         TextSelection.collapsed(offset: controller.text.length);
     onChanged?.call(next);
+  }
+
+  void _add(int delta) => _setValue(parseVnd(controller.text) + delta);
+
+  /// Nhân số đang gõ với 1000.
+  ///
+  /// Tiền Việt hầu như luôn tròn nghìn nên gõ "35" rồi bấm là ra 35.000, đỡ
+  /// phải bấm ba số 0. Khác với các nút cộng nhanh ở chỗ nó thay đổi độ lớn
+  /// của số đang có chứ không cộng thêm một khoản cố định.
+  void _appendThousand() {
+    final current = parseVnd(controller.text);
+    if (current == 0) return;
+    _setValue(current * 1000);
   }
 
   @override
@@ -105,12 +116,15 @@ class AmountField extends StatelessWidget {
                   onPressed: () => _add(value),
                 ),
               ActionChip(
+                label: const Text('.000'),
+                visualDensity: VisualDensity.compact,
+                tooltip: 'Nhân với 1000',
+                onPressed: _appendThousand,
+              ),
+              ActionChip(
                 label: const Text('Xoá'),
                 visualDensity: VisualDensity.compact,
-                onPressed: () {
-                  controller.clear();
-                  onChanged?.call(0);
-                },
+                onPressed: () => _setValue(0),
               ),
             ],
           ),
@@ -278,7 +292,7 @@ void showSnack(BuildContext context, String message, {SnackBarAction? action}) {
         content: Text(message),
         action: action,
         behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 4),
+        duration: const Duration(seconds: 5),
       ),
     );
 }

@@ -80,6 +80,48 @@ class TxView {
   }
 }
 
+/// Một quỹ kèm số đã để dành và ví đang giữ tiền.
+class FundProgress {
+  const FundProgress({
+    required this.fund,
+    required this.saved,
+    required this.walletName,
+    this.walletIconKey,
+    this.walletColorValue,
+  });
+
+  final Fund fund;
+
+  /// Số tiền đang có trong quỹ.
+  final int saved;
+
+  /// Ví thật đang giữ số tiền này.
+  final String walletName;
+  final String? walletIconKey;
+  final int? walletColorValue;
+
+  int get id => fund.id;
+  String get name => fund.name;
+  int? get target => fund.targetAmount;
+
+  /// Còn thiếu bao nhiêu nữa mới đủ mục tiêu. Null nếu không đặt mục tiêu.
+  int? get missing {
+    final t = target;
+    if (t == null) return null;
+    final left = t - saved;
+    return left > 0 ? left : 0;
+  }
+
+  bool get hasTarget => target != null && target! > 0;
+  bool get isComplete => hasTarget && saved >= target!;
+
+  double get ratio {
+    final t = target;
+    if (t == null || t <= 0) return 0;
+    return (saved / t).clamp(0.0, 1.0);
+  }
+}
+
 /// Tổng thu / chi của một tháng.
 class MonthTotals {
   const MonthTotals({required this.income, required this.expense});
@@ -201,6 +243,176 @@ class Repository {
     final maxExp = w.sortOrder.max();
     final q = db.selectOnly(w)..addColumns([maxExp]);
     return ((await q.getSingle()).read(maxExp) ?? -1) + 1;
+  }
+
+  // ----- Quỹ ------------------------------------------------------------
+
+  /// Số tiền đang có trong quỹ `f`, dùng chung cho mọi truy vấn về quỹ.
+  ///
+  /// Chiều tiền xét theo VÍ ĐANG GIỮ QUỸ chứ không phải theo chân ví nào có giá
+  /// trị: nạp quỹ là một lần chuyển ví nên có cả hai chân, nếu chỉ hỏi "chân
+  /// nào khác null" thì hai vế triệt tiêu và quỹ luôn bằng 0.
+  static const _fundSavedExpr = '''(
+        COALESCE((SELECT SUM(t.amount) FROM transactions t
+                  WHERE t.fund_id = f.id AND t.deleted_at IS NULL
+                    AND t.wallet_to_id = f.wallet_id), 0)
+        - COALESCE((SELECT SUM(t.amount) FROM transactions t
+                    WHERE t.fund_id = f.id AND t.deleted_at IS NULL
+                      AND t.wallet_from_id = f.wallet_id), 0)
+      )''';
+
+
+  /// Tổng tiền đang nằm trong các quỹ chưa lưu trữ.
+  ///
+  /// Số này bị trừ khỏi "tiền tiêu được" nhưng vẫn nằm trong tổng tài sản đầy
+  /// đủ — tiền vẫn là của mình, chỉ là đã có chỗ đến.
+  Stream<int> watchTotalInFunds() {
+    const sql = '''
+      SELECT COALESCE(SUM(saved), 0) AS total FROM (
+        SELECT $_fundSavedExpr AS saved
+        FROM funds f WHERE f.is_archived = 0
+      )
+    ''';
+    return db
+        .customSelect(sql, readsFrom: {db.funds, db.transactions})
+        .watchSingle()
+        .map((row) => row.read<int>('total'));
+  }
+
+  /// Tiền thực sự tiêu được: tổng ví trừ đi phần đã hứa cho các quỹ.
+  Stream<int> watchSpendableAssets() {
+    return watchTotalAssets().asyncMap((total) async {
+      final funds = await watchTotalInFunds().first;
+      return total - funds;
+    });
+  }
+
+  /// Danh sách quỹ kèm số đã để dành và ví đang giữ tiền.
+  Stream<List<FundProgress>> watchFunds({bool includeArchived = false}) {
+    final sql = '''
+      SELECT f.*,
+             w.name        AS wallet_name,
+             w.icon_key    AS wallet_icon,
+             w.color_value AS wallet_color,
+             $_fundSavedExpr AS saved
+      FROM funds f
+      JOIN wallets w ON w.id = f.wallet_id
+      ${includeArchived ? '' : 'WHERE f.is_archived = 0'}
+      ORDER BY f.sort_order, f.id
+    ''';
+
+    return db
+        .customSelect(sql, readsFrom: {db.funds, db.wallets, db.transactions})
+        .watch()
+        .map((rows) => rows
+            .map((row) => FundProgress(
+                  fund: db.funds.map(row.data),
+                  saved: row.read<int>('saved'),
+                  walletName: row.read<String>('wallet_name'),
+                  walletIconKey: row.read<String?>('wallet_icon'),
+                  walletColorValue: row.read<int?>('wallet_color'),
+                ))
+            .toList());
+  }
+
+  Future<int> savedInFund(int fundId) async {
+    final row = await db.customSelect(
+      '''
+      SELECT $_fundSavedExpr AS saved
+      FROM funds f WHERE f.id = ?
+      ''',
+      variables: [Variable.withInt(fundId)],
+      readsFrom: {db.funds, db.transactions},
+    ).getSingleOrNull();
+    return row?.read<int>('saved') ?? 0;
+  }
+
+  Future<int> insertFund(FundsCompanion f) => db.into(db.funds).insert(f);
+
+  Future<bool> updateFund(Fund f) => db.update(db.funds).replace(f);
+
+  Future<void> archiveFund(int id, {required bool archived}) =>
+      (db.update(db.funds)..where((f) => f.id.equals(id))).write(
+        FundsCompanion(
+          isArchived: Value(archived),
+          updatedAt: Value(_now()),
+        ),
+      );
+
+  /// Xoá quỹ. Các giao dịch từng gắn quỹ vẫn còn nguyên, chỉ mất nhãn quỹ —
+  /// tiền chưa bao giờ rời ví nên số dư không đổi.
+  Future<void> deleteFund(int id) async {
+    await db.transaction(() async {
+      await (db.update(db.transactions)..where((t) => t.fundId.equals(id)))
+          .write(const TransactionsCompanion(fundId: Value(null)));
+      await (db.delete(db.funds)..where((f) => f.id.equals(id))).go();
+    });
+  }
+
+  Future<int> countTransactionsOfFund(int fundId) async {
+    final t = db.transactions;
+    final countExp = t.id.count();
+    final q = db.selectOnly(t)
+      ..addColumns([countExp])
+      ..where(t.deletedAt.isNull() & t.fundId.equals(fundId));
+    return (await q.getSingle()).read(countExp) ?? 0;
+  }
+
+  Future<int> nextFundSortOrder() async {
+    final f = db.funds;
+    final maxExp = f.sortOrder.max();
+    final q = db.selectOnly(f)..addColumns([maxExp]);
+    return ((await q.getSingle()).read(maxExp) ?? -1) + 1;
+  }
+
+  /// Nạp tiền vào quỹ: chuyển từ ví chi tiêu sang ví đang giữ quỹ.
+  ///
+  /// Đây đúng là một lần chuyển ví thật, nên ghi bằng [TxKind.transfer] chứ
+  /// không đẻ thêm loại giao dịch mới. Gắn thêm quỹ để biết khoản chuyển này
+  /// dành cho việc gì.
+  ///
+  /// Nếu ví nguồn và ví giữ quỹ là một thì không có tiền nào di chuyển, nhưng
+  /// vẫn cần ghi để đánh dấu phần tiền đã được hứa — lúc đó dùng chính ví đó
+  /// làm cả hai chân.
+  Future<int> depositToFund({
+    required int fundId,
+    required int walletFromId,
+    required int walletToId,
+    required int amount,
+    required DateTime occurredAt,
+    String? note,
+  }) {
+    assert(amount > 0);
+    return addTransaction(
+      kind: TxKind.transfer,
+      amount: amount,
+      occurredAt: occurredAt,
+      walletFromId: walletFromId,
+      walletToId: walletToId,
+      fundId: fundId,
+      note: note,
+    );
+  }
+
+  /// Rút tiền khỏi quỹ mà chưa tiêu: trả lại về ví chi tiêu.
+  Future<int> withdrawFromFund({
+    required int fundId,
+    required int walletFromId,
+    required int walletToId,
+    required int amount,
+    required DateTime occurredAt,
+    String? note,
+  }) {
+    assert(amount > 0);
+    return addTransaction(
+      kind: TxKind.transfer,
+      amount: amount,
+      occurredAt: occurredAt,
+      walletFromId: walletFromId,
+      walletToId: walletToId,
+      fundId: fundId,
+      note: note,
+    );
   }
 
   // ----- Danh mục -------------------------------------------------------
@@ -500,6 +712,7 @@ class Repository {
     int? walletToId,
     int? categoryId,
     int? personId,
+    int? fundId,
     String? note,
     String? groupId,
     int? recurringId,
@@ -518,6 +731,7 @@ class Repository {
             walletToId: Value(walletToId),
             categoryId: Value(categoryId),
             personId: Value(personId),
+            fundId: Value(fundId),
             debtDelta: Value(kind.debtDelta(amount)),
             note: Value(note),
             groupId: Value(groupId),
@@ -538,6 +752,7 @@ class Repository {
     int? walletToId,
     int? categoryId,
     int? personId,
+    int? fundId,
     String? note,
   }) {
     assert(amount > 0);
@@ -552,6 +767,7 @@ class Repository {
         walletToId: Value(walletToId),
         categoryId: Value(categoryId),
         personId: Value(personId),
+        fundId: Value(fundId),
         debtDelta: Value(kind.debtDelta(amount)),
         note: Value(note),
         updatedAt: Value(_now()),

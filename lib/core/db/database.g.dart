@@ -2780,6 +2780,721 @@ class RecurringTemplatesCompanion extends UpdateCompanion<RecurringTemplate> {
   }
 }
 
+class $FundsTable extends Funds with TableInfo<$FundsTable, Fund> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $FundsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    additionalChecks: GeneratedColumn.checkTextLength(
+      minTextLength: 1,
+      maxTextLength: 60,
+    ),
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _walletIdMeta = const VerificationMeta(
+    'walletId',
+  );
+  @override
+  late final GeneratedColumn<int> walletId = GeneratedColumn<int>(
+    'wallet_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES wallets (id)',
+    ),
+  );
+  static const VerificationMeta _targetAmountMeta = const VerificationMeta(
+    'targetAmount',
+  );
+  @override
+  late final GeneratedColumn<int> targetAmount = GeneratedColumn<int>(
+    'target_amount',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _dueDayKeyMeta = const VerificationMeta(
+    'dueDayKey',
+  );
+  @override
+  late final GeneratedColumn<int> dueDayKey = GeneratedColumn<int>(
+    'due_day_key',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _noteMeta = const VerificationMeta('note');
+  @override
+  late final GeneratedColumn<String> note = GeneratedColumn<String>(
+    'note',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _iconKeyMeta = const VerificationMeta(
+    'iconKey',
+  );
+  @override
+  late final GeneratedColumn<String> iconKey = GeneratedColumn<String>(
+    'icon_key',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _colorValueMeta = const VerificationMeta(
+    'colorValue',
+  );
+  @override
+  late final GeneratedColumn<int> colorValue = GeneratedColumn<int>(
+    'color_value',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _isArchivedMeta = const VerificationMeta(
+    'isArchived',
+  );
+  @override
+  late final GeneratedColumn<bool> isArchived = GeneratedColumn<bool>(
+    'is_archived',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_archived" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _sortOrderMeta = const VerificationMeta(
+    'sortOrder',
+  );
+  @override
+  late final GeneratedColumn<int> sortOrder = GeneratedColumn<int>(
+    'sort_order',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<int> createdAt = GeneratedColumn<int>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<int> updatedAt = GeneratedColumn<int>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    name,
+    walletId,
+    targetAmount,
+    dueDayKey,
+    note,
+    iconKey,
+    colorValue,
+    isArchived,
+    sortOrder,
+    createdAt,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'funds';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<Fund> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('wallet_id')) {
+      context.handle(
+        _walletIdMeta,
+        walletId.isAcceptableOrUnknown(data['wallet_id']!, _walletIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_walletIdMeta);
+    }
+    if (data.containsKey('target_amount')) {
+      context.handle(
+        _targetAmountMeta,
+        targetAmount.isAcceptableOrUnknown(
+          data['target_amount']!,
+          _targetAmountMeta,
+        ),
+      );
+    }
+    if (data.containsKey('due_day_key')) {
+      context.handle(
+        _dueDayKeyMeta,
+        dueDayKey.isAcceptableOrUnknown(data['due_day_key']!, _dueDayKeyMeta),
+      );
+    }
+    if (data.containsKey('note')) {
+      context.handle(
+        _noteMeta,
+        note.isAcceptableOrUnknown(data['note']!, _noteMeta),
+      );
+    }
+    if (data.containsKey('icon_key')) {
+      context.handle(
+        _iconKeyMeta,
+        iconKey.isAcceptableOrUnknown(data['icon_key']!, _iconKeyMeta),
+      );
+    }
+    if (data.containsKey('color_value')) {
+      context.handle(
+        _colorValueMeta,
+        colorValue.isAcceptableOrUnknown(data['color_value']!, _colorValueMeta),
+      );
+    }
+    if (data.containsKey('is_archived')) {
+      context.handle(
+        _isArchivedMeta,
+        isArchived.isAcceptableOrUnknown(data['is_archived']!, _isArchivedMeta),
+      );
+    }
+    if (data.containsKey('sort_order')) {
+      context.handle(
+        _sortOrderMeta,
+        sortOrder.isAcceptableOrUnknown(data['sort_order']!, _sortOrderMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  Fund map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return Fund(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      )!,
+      walletId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}wallet_id'],
+      )!,
+      targetAmount: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}target_amount'],
+      ),
+      dueDayKey: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}due_day_key'],
+      ),
+      note: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}note'],
+      ),
+      iconKey: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}icon_key'],
+      ),
+      colorValue: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}color_value'],
+      ),
+      isArchived: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_archived'],
+      )!,
+      sortOrder: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}sort_order'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $FundsTable createAlias(String alias) {
+    return $FundsTable(attachedDatabase, alias);
+  }
+}
+
+class Fund extends DataClass implements Insertable<Fund> {
+  final int id;
+  final String name;
+
+  /// Ví đang giữ tiền của quỹ này. Xoá ví thì quỹ mất chỗ neo nên chặn lại.
+  final int walletId;
+
+  /// Số tiền mục tiêu, hoặc null nếu chỉ để dành mà không có đích cụ thể.
+  final int? targetAmount;
+
+  /// Hạn cần dùng tới, dạng yyyymmdd. Dùng để nhắc và để sắp xếp.
+  final int? dueDayKey;
+  final String? note;
+  final String? iconKey;
+  final int? colorValue;
+
+  /// Quỹ đã dùng xong nhưng giữ lại để xem lịch sử.
+  final bool isArchived;
+  final int sortOrder;
+  final int createdAt;
+  final int updatedAt;
+  const Fund({
+    required this.id,
+    required this.name,
+    required this.walletId,
+    this.targetAmount,
+    this.dueDayKey,
+    this.note,
+    this.iconKey,
+    this.colorValue,
+    required this.isArchived,
+    required this.sortOrder,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['name'] = Variable<String>(name);
+    map['wallet_id'] = Variable<int>(walletId);
+    if (!nullToAbsent || targetAmount != null) {
+      map['target_amount'] = Variable<int>(targetAmount);
+    }
+    if (!nullToAbsent || dueDayKey != null) {
+      map['due_day_key'] = Variable<int>(dueDayKey);
+    }
+    if (!nullToAbsent || note != null) {
+      map['note'] = Variable<String>(note);
+    }
+    if (!nullToAbsent || iconKey != null) {
+      map['icon_key'] = Variable<String>(iconKey);
+    }
+    if (!nullToAbsent || colorValue != null) {
+      map['color_value'] = Variable<int>(colorValue);
+    }
+    map['is_archived'] = Variable<bool>(isArchived);
+    map['sort_order'] = Variable<int>(sortOrder);
+    map['created_at'] = Variable<int>(createdAt);
+    map['updated_at'] = Variable<int>(updatedAt);
+    return map;
+  }
+
+  FundsCompanion toCompanion(bool nullToAbsent) {
+    return FundsCompanion(
+      id: Value(id),
+      name: Value(name),
+      walletId: Value(walletId),
+      targetAmount: targetAmount == null && nullToAbsent
+          ? const Value.absent()
+          : Value(targetAmount),
+      dueDayKey: dueDayKey == null && nullToAbsent
+          ? const Value.absent()
+          : Value(dueDayKey),
+      note: note == null && nullToAbsent ? const Value.absent() : Value(note),
+      iconKey: iconKey == null && nullToAbsent
+          ? const Value.absent()
+          : Value(iconKey),
+      colorValue: colorValue == null && nullToAbsent
+          ? const Value.absent()
+          : Value(colorValue),
+      isArchived: Value(isArchived),
+      sortOrder: Value(sortOrder),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory Fund.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return Fund(
+      id: serializer.fromJson<int>(json['id']),
+      name: serializer.fromJson<String>(json['name']),
+      walletId: serializer.fromJson<int>(json['walletId']),
+      targetAmount: serializer.fromJson<int?>(json['targetAmount']),
+      dueDayKey: serializer.fromJson<int?>(json['dueDayKey']),
+      note: serializer.fromJson<String?>(json['note']),
+      iconKey: serializer.fromJson<String?>(json['iconKey']),
+      colorValue: serializer.fromJson<int?>(json['colorValue']),
+      isArchived: serializer.fromJson<bool>(json['isArchived']),
+      sortOrder: serializer.fromJson<int>(json['sortOrder']),
+      createdAt: serializer.fromJson<int>(json['createdAt']),
+      updatedAt: serializer.fromJson<int>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'name': serializer.toJson<String>(name),
+      'walletId': serializer.toJson<int>(walletId),
+      'targetAmount': serializer.toJson<int?>(targetAmount),
+      'dueDayKey': serializer.toJson<int?>(dueDayKey),
+      'note': serializer.toJson<String?>(note),
+      'iconKey': serializer.toJson<String?>(iconKey),
+      'colorValue': serializer.toJson<int?>(colorValue),
+      'isArchived': serializer.toJson<bool>(isArchived),
+      'sortOrder': serializer.toJson<int>(sortOrder),
+      'createdAt': serializer.toJson<int>(createdAt),
+      'updatedAt': serializer.toJson<int>(updatedAt),
+    };
+  }
+
+  Fund copyWith({
+    int? id,
+    String? name,
+    int? walletId,
+    Value<int?> targetAmount = const Value.absent(),
+    Value<int?> dueDayKey = const Value.absent(),
+    Value<String?> note = const Value.absent(),
+    Value<String?> iconKey = const Value.absent(),
+    Value<int?> colorValue = const Value.absent(),
+    bool? isArchived,
+    int? sortOrder,
+    int? createdAt,
+    int? updatedAt,
+  }) => Fund(
+    id: id ?? this.id,
+    name: name ?? this.name,
+    walletId: walletId ?? this.walletId,
+    targetAmount: targetAmount.present ? targetAmount.value : this.targetAmount,
+    dueDayKey: dueDayKey.present ? dueDayKey.value : this.dueDayKey,
+    note: note.present ? note.value : this.note,
+    iconKey: iconKey.present ? iconKey.value : this.iconKey,
+    colorValue: colorValue.present ? colorValue.value : this.colorValue,
+    isArchived: isArchived ?? this.isArchived,
+    sortOrder: sortOrder ?? this.sortOrder,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  Fund copyWithCompanion(FundsCompanion data) {
+    return Fund(
+      id: data.id.present ? data.id.value : this.id,
+      name: data.name.present ? data.name.value : this.name,
+      walletId: data.walletId.present ? data.walletId.value : this.walletId,
+      targetAmount: data.targetAmount.present
+          ? data.targetAmount.value
+          : this.targetAmount,
+      dueDayKey: data.dueDayKey.present ? data.dueDayKey.value : this.dueDayKey,
+      note: data.note.present ? data.note.value : this.note,
+      iconKey: data.iconKey.present ? data.iconKey.value : this.iconKey,
+      colorValue: data.colorValue.present
+          ? data.colorValue.value
+          : this.colorValue,
+      isArchived: data.isArchived.present
+          ? data.isArchived.value
+          : this.isArchived,
+      sortOrder: data.sortOrder.present ? data.sortOrder.value : this.sortOrder,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('Fund(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('walletId: $walletId, ')
+          ..write('targetAmount: $targetAmount, ')
+          ..write('dueDayKey: $dueDayKey, ')
+          ..write('note: $note, ')
+          ..write('iconKey: $iconKey, ')
+          ..write('colorValue: $colorValue, ')
+          ..write('isArchived: $isArchived, ')
+          ..write('sortOrder: $sortOrder, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    name,
+    walletId,
+    targetAmount,
+    dueDayKey,
+    note,
+    iconKey,
+    colorValue,
+    isArchived,
+    sortOrder,
+    createdAt,
+    updatedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is Fund &&
+          other.id == this.id &&
+          other.name == this.name &&
+          other.walletId == this.walletId &&
+          other.targetAmount == this.targetAmount &&
+          other.dueDayKey == this.dueDayKey &&
+          other.note == this.note &&
+          other.iconKey == this.iconKey &&
+          other.colorValue == this.colorValue &&
+          other.isArchived == this.isArchived &&
+          other.sortOrder == this.sortOrder &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt);
+}
+
+class FundsCompanion extends UpdateCompanion<Fund> {
+  final Value<int> id;
+  final Value<String> name;
+  final Value<int> walletId;
+  final Value<int?> targetAmount;
+  final Value<int?> dueDayKey;
+  final Value<String?> note;
+  final Value<String?> iconKey;
+  final Value<int?> colorValue;
+  final Value<bool> isArchived;
+  final Value<int> sortOrder;
+  final Value<int> createdAt;
+  final Value<int> updatedAt;
+  const FundsCompanion({
+    this.id = const Value.absent(),
+    this.name = const Value.absent(),
+    this.walletId = const Value.absent(),
+    this.targetAmount = const Value.absent(),
+    this.dueDayKey = const Value.absent(),
+    this.note = const Value.absent(),
+    this.iconKey = const Value.absent(),
+    this.colorValue = const Value.absent(),
+    this.isArchived = const Value.absent(),
+    this.sortOrder = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+  });
+  FundsCompanion.insert({
+    this.id = const Value.absent(),
+    required String name,
+    required int walletId,
+    this.targetAmount = const Value.absent(),
+    this.dueDayKey = const Value.absent(),
+    this.note = const Value.absent(),
+    this.iconKey = const Value.absent(),
+    this.colorValue = const Value.absent(),
+    this.isArchived = const Value.absent(),
+    this.sortOrder = const Value.absent(),
+    required int createdAt,
+    required int updatedAt,
+  }) : name = Value(name),
+       walletId = Value(walletId),
+       createdAt = Value(createdAt),
+       updatedAt = Value(updatedAt);
+  static Insertable<Fund> custom({
+    Expression<int>? id,
+    Expression<String>? name,
+    Expression<int>? walletId,
+    Expression<int>? targetAmount,
+    Expression<int>? dueDayKey,
+    Expression<String>? note,
+    Expression<String>? iconKey,
+    Expression<int>? colorValue,
+    Expression<bool>? isArchived,
+    Expression<int>? sortOrder,
+    Expression<int>? createdAt,
+    Expression<int>? updatedAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (name != null) 'name': name,
+      if (walletId != null) 'wallet_id': walletId,
+      if (targetAmount != null) 'target_amount': targetAmount,
+      if (dueDayKey != null) 'due_day_key': dueDayKey,
+      if (note != null) 'note': note,
+      if (iconKey != null) 'icon_key': iconKey,
+      if (colorValue != null) 'color_value': colorValue,
+      if (isArchived != null) 'is_archived': isArchived,
+      if (sortOrder != null) 'sort_order': sortOrder,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+    });
+  }
+
+  FundsCompanion copyWith({
+    Value<int>? id,
+    Value<String>? name,
+    Value<int>? walletId,
+    Value<int?>? targetAmount,
+    Value<int?>? dueDayKey,
+    Value<String?>? note,
+    Value<String?>? iconKey,
+    Value<int?>? colorValue,
+    Value<bool>? isArchived,
+    Value<int>? sortOrder,
+    Value<int>? createdAt,
+    Value<int>? updatedAt,
+  }) {
+    return FundsCompanion(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      walletId: walletId ?? this.walletId,
+      targetAmount: targetAmount ?? this.targetAmount,
+      dueDayKey: dueDayKey ?? this.dueDayKey,
+      note: note ?? this.note,
+      iconKey: iconKey ?? this.iconKey,
+      colorValue: colorValue ?? this.colorValue,
+      isArchived: isArchived ?? this.isArchived,
+      sortOrder: sortOrder ?? this.sortOrder,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (walletId.present) {
+      map['wallet_id'] = Variable<int>(walletId.value);
+    }
+    if (targetAmount.present) {
+      map['target_amount'] = Variable<int>(targetAmount.value);
+    }
+    if (dueDayKey.present) {
+      map['due_day_key'] = Variable<int>(dueDayKey.value);
+    }
+    if (note.present) {
+      map['note'] = Variable<String>(note.value);
+    }
+    if (iconKey.present) {
+      map['icon_key'] = Variable<String>(iconKey.value);
+    }
+    if (colorValue.present) {
+      map['color_value'] = Variable<int>(colorValue.value);
+    }
+    if (isArchived.present) {
+      map['is_archived'] = Variable<bool>(isArchived.value);
+    }
+    if (sortOrder.present) {
+      map['sort_order'] = Variable<int>(sortOrder.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<int>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<int>(updatedAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('FundsCompanion(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('walletId: $walletId, ')
+          ..write('targetAmount: $targetAmount, ')
+          ..write('dueDayKey: $dueDayKey, ')
+          ..write('note: $note, ')
+          ..write('iconKey: $iconKey, ')
+          ..write('colorValue: $colorValue, ')
+          ..write('isArchived: $isArchived, ')
+          ..write('sortOrder: $sortOrder, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $TransactionsTable extends Transactions
     with TableInfo<$TransactionsTable, Transaction> {
   @override
@@ -2950,6 +3665,18 @@ class $TransactionsTable extends Transactions
       'REFERENCES recurring_templates (id)',
     ),
   );
+  static const VerificationMeta _fundIdMeta = const VerificationMeta('fundId');
+  @override
+  late final GeneratedColumn<int> fundId = GeneratedColumn<int>(
+    'fund_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES funds (id)',
+    ),
+  );
   static const VerificationMeta _isWriteoffMeta = const VerificationMeta(
     'isWriteoff',
   );
@@ -3014,6 +3741,7 @@ class $TransactionsTable extends Transactions
     note,
     groupId,
     recurringId,
+    fundId,
     isWriteoff,
     createdAt,
     updatedAt,
@@ -3123,6 +3851,12 @@ class $TransactionsTable extends Transactions
         ),
       );
     }
+    if (data.containsKey('fund_id')) {
+      context.handle(
+        _fundIdMeta,
+        fundId.isAcceptableOrUnknown(data['fund_id']!, _fundIdMeta),
+      );
+    }
     if (data.containsKey('is_writeoff')) {
       context.handle(
         _isWriteoffMeta,
@@ -3218,6 +3952,10 @@ class $TransactionsTable extends Transactions
         DriftSqlType.int,
         data['${effectivePrefix}recurring_id'],
       ),
+      fundId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}fund_id'],
+      ),
       isWriteoff: attachedDatabase.typeMapping.read(
         DriftSqlType.bool,
         data['${effectivePrefix}is_writeoff'],
@@ -3278,6 +4016,16 @@ class Transaction extends DataClass implements Insertable<Transaction> {
   final String? groupId;
   final int? recurringId;
 
+  /// Quỹ mà giao dịch này nạp vào hoặc lấy ra.
+  ///
+  /// Không phải một loại giao dịch riêng: nạp quỹ là một [TxKind.transfer] có
+  /// gắn quỹ, chi từ quỹ là một [TxKind.expense] có gắn quỹ. Nhờ vậy công thức
+  /// tính số dư ví không phải rẽ nhánh thêm lần nào nữa.
+  ///
+  /// Chiều tiền của quỹ suy ra từ chân ví giống hệt cách làm với số dư: giao
+  /// dịch đưa tiền vào ví giữ quỹ thì quỹ tăng, lấy tiền ra thì quỹ giảm.
+  final int? fundId;
+
   /// Tất toán không có dòng tiền (xoá nợ, cho luôn). Khi đó không ví nào bị
   /// đụng tới, nhưng công nợ vẫn về 0.
   final bool isWriteoff;
@@ -3302,6 +4050,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     this.note,
     this.groupId,
     this.recurringId,
+    this.fundId,
     required this.isWriteoff,
     required this.createdAt,
     required this.updatedAt,
@@ -3342,6 +4091,9 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     if (!nullToAbsent || recurringId != null) {
       map['recurring_id'] = Variable<int>(recurringId);
     }
+    if (!nullToAbsent || fundId != null) {
+      map['fund_id'] = Variable<int>(fundId);
+    }
     map['is_writeoff'] = Variable<bool>(isWriteoff);
     map['created_at'] = Variable<int>(createdAt);
     map['updated_at'] = Variable<int>(updatedAt);
@@ -3379,6 +4131,9 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       recurringId: recurringId == null && nullToAbsent
           ? const Value.absent()
           : Value(recurringId),
+      fundId: fundId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(fundId),
       isWriteoff: Value(isWriteoff),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
@@ -3410,6 +4165,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       note: serializer.fromJson<String?>(json['note']),
       groupId: serializer.fromJson<String?>(json['groupId']),
       recurringId: serializer.fromJson<int?>(json['recurringId']),
+      fundId: serializer.fromJson<int?>(json['fundId']),
       isWriteoff: serializer.fromJson<bool>(json['isWriteoff']),
       createdAt: serializer.fromJson<int>(json['createdAt']),
       updatedAt: serializer.fromJson<int>(json['updatedAt']),
@@ -3436,6 +4192,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       'note': serializer.toJson<String?>(note),
       'groupId': serializer.toJson<String?>(groupId),
       'recurringId': serializer.toJson<int?>(recurringId),
+      'fundId': serializer.toJson<int?>(fundId),
       'isWriteoff': serializer.toJson<bool>(isWriteoff),
       'createdAt': serializer.toJson<int>(createdAt),
       'updatedAt': serializer.toJson<int>(updatedAt),
@@ -3458,6 +4215,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     Value<String?> note = const Value.absent(),
     Value<String?> groupId = const Value.absent(),
     Value<int?> recurringId = const Value.absent(),
+    Value<int?> fundId = const Value.absent(),
     bool? isWriteoff,
     int? createdAt,
     int? updatedAt,
@@ -3477,6 +4235,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     note: note.present ? note.value : this.note,
     groupId: groupId.present ? groupId.value : this.groupId,
     recurringId: recurringId.present ? recurringId.value : this.recurringId,
+    fundId: fundId.present ? fundId.value : this.fundId,
     isWriteoff: isWriteoff ?? this.isWriteoff,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
@@ -3508,6 +4267,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       recurringId: data.recurringId.present
           ? data.recurringId.value
           : this.recurringId,
+      fundId: data.fundId.present ? data.fundId.value : this.fundId,
       isWriteoff: data.isWriteoff.present
           ? data.isWriteoff.value
           : this.isWriteoff,
@@ -3534,6 +4294,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
           ..write('note: $note, ')
           ..write('groupId: $groupId, ')
           ..write('recurringId: $recurringId, ')
+          ..write('fundId: $fundId, ')
           ..write('isWriteoff: $isWriteoff, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
@@ -3558,6 +4319,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     note,
     groupId,
     recurringId,
+    fundId,
     isWriteoff,
     createdAt,
     updatedAt,
@@ -3581,6 +4343,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
           other.note == this.note &&
           other.groupId == this.groupId &&
           other.recurringId == this.recurringId &&
+          other.fundId == this.fundId &&
           other.isWriteoff == this.isWriteoff &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt &&
@@ -3602,6 +4365,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
   final Value<String?> note;
   final Value<String?> groupId;
   final Value<int?> recurringId;
+  final Value<int?> fundId;
   final Value<bool> isWriteoff;
   final Value<int> createdAt;
   final Value<int> updatedAt;
@@ -3621,6 +4385,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     this.note = const Value.absent(),
     this.groupId = const Value.absent(),
     this.recurringId = const Value.absent(),
+    this.fundId = const Value.absent(),
     this.isWriteoff = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
@@ -3641,6 +4406,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     this.note = const Value.absent(),
     this.groupId = const Value.absent(),
     this.recurringId = const Value.absent(),
+    this.fundId = const Value.absent(),
     this.isWriteoff = const Value.absent(),
     required int createdAt,
     required int updatedAt,
@@ -3667,6 +4433,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     Expression<String>? note,
     Expression<String>? groupId,
     Expression<int>? recurringId,
+    Expression<int>? fundId,
     Expression<bool>? isWriteoff,
     Expression<int>? createdAt,
     Expression<int>? updatedAt,
@@ -3687,6 +4454,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
       if (note != null) 'note': note,
       if (groupId != null) 'group_id': groupId,
       if (recurringId != null) 'recurring_id': recurringId,
+      if (fundId != null) 'fund_id': fundId,
       if (isWriteoff != null) 'is_writeoff': isWriteoff,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
@@ -3709,6 +4477,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     Value<String?>? note,
     Value<String?>? groupId,
     Value<int?>? recurringId,
+    Value<int?>? fundId,
     Value<bool>? isWriteoff,
     Value<int>? createdAt,
     Value<int>? updatedAt,
@@ -3729,6 +4498,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
       note: note ?? this.note,
       groupId: groupId ?? this.groupId,
       recurringId: recurringId ?? this.recurringId,
+      fundId: fundId ?? this.fundId,
       isWriteoff: isWriteoff ?? this.isWriteoff,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
@@ -3783,6 +4553,9 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     if (recurringId.present) {
       map['recurring_id'] = Variable<int>(recurringId.value);
     }
+    if (fundId.present) {
+      map['fund_id'] = Variable<int>(fundId.value);
+    }
     if (isWriteoff.present) {
       map['is_writeoff'] = Variable<bool>(isWriteoff.value);
     }
@@ -3815,6 +4588,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
           ..write('note: $note, ')
           ..write('groupId: $groupId, ')
           ..write('recurringId: $recurringId, ')
+          ..write('fundId: $fundId, ')
           ..write('isWriteoff: $isWriteoff, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
@@ -4452,6 +5226,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $PeopleTable people = $PeopleTable(this);
   late final $RecurringTemplatesTable recurringTemplates =
       $RecurringTemplatesTable(this);
+  late final $FundsTable funds = $FundsTable(this);
   late final $TransactionsTable transactions = $TransactionsTable(this);
   late final $BudgetsTable budgets = $BudgetsTable(this);
   late final $SettingsKvTable settingsKv = $SettingsKvTable(this);
@@ -4464,6 +5239,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     categories,
     people,
     recurringTemplates,
+    funds,
     transactions,
     budgets,
     settingsKv,
@@ -4502,6 +5278,25 @@ typedef $$WalletsTableUpdateCompanionBuilder =
 final class $$WalletsTableReferences
     extends BaseReferences<_$AppDatabase, $WalletsTable, Wallet> {
   $$WalletsTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static MultiTypedResultKey<$FundsTable, List<Fund>> _fundsRefsTable(
+    _$AppDatabase db,
+  ) => MultiTypedResultKey.fromTable(
+    db.funds,
+    aliasName: $_aliasNameGenerator(db.wallets.id, db.funds.walletId),
+  );
+
+  $$FundsTableProcessedTableManager get fundsRefs {
+    final manager = $$FundsTableTableManager(
+      $_db,
+      $_db.funds,
+    ).filter((f) => f.walletId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_fundsRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
 
   static MultiTypedResultKey<$TransactionsTable, List<Transaction>>
   _outgoingTransactionsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
@@ -4610,6 +5405,31 @@ class $$WalletsTableFilterComposer
     column: $table.updatedAt,
     builder: (column) => ColumnFilters(column),
   );
+
+  Expression<bool> fundsRefs(
+    Expression<bool> Function($$FundsTableFilterComposer f) f,
+  ) {
+    final $$FundsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.funds,
+      getReferencedColumn: (t) => t.walletId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$FundsTableFilterComposer(
+            $db: $db,
+            $table: $db.funds,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 
   Expression<bool> outgoingTransactions(
     Expression<bool> Function($$TransactionsTableFilterComposer f) f,
@@ -4775,6 +5595,31 @@ class $$WalletsTableAnnotationComposer
   GeneratedColumn<int> get updatedAt =>
       $composableBuilder(column: $table.updatedAt, builder: (column) => column);
 
+  Expression<T> fundsRefs<T extends Object>(
+    Expression<T> Function($$FundsTableAnnotationComposer a) f,
+  ) {
+    final $$FundsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.funds,
+      getReferencedColumn: (t) => t.walletId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$FundsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.funds,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
   Expression<T> outgoingTransactions<T extends Object>(
     Expression<T> Function($$TransactionsTableAnnotationComposer a) f,
   ) {
@@ -4840,6 +5685,7 @@ class $$WalletsTableTableManager
           (Wallet, $$WalletsTableReferences),
           Wallet,
           PrefetchHooks Function({
+            bool fundsRefs,
             bool outgoingTransactions,
             bool incomingTransactions,
           })
@@ -4916,16 +5762,34 @@ class $$WalletsTableTableManager
               )
               .toList(),
           prefetchHooksCallback:
-              ({outgoingTransactions = false, incomingTransactions = false}) {
+              ({
+                fundsRefs = false,
+                outgoingTransactions = false,
+                incomingTransactions = false,
+              }) {
                 return PrefetchHooks(
                   db: db,
                   explicitlyWatchedTables: [
+                    if (fundsRefs) db.funds,
                     if (outgoingTransactions) db.transactions,
                     if (incomingTransactions) db.transactions,
                   ],
                   addJoins: null,
                   getPrefetchedDataCallback: (items) async {
                     return [
+                      if (fundsRefs)
+                        await $_getPrefetchedData<Wallet, $WalletsTable, Fund>(
+                          currentTable: table,
+                          referencedTable: $$WalletsTableReferences
+                              ._fundsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$WalletsTableReferences(db, table, p0).fundsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.walletId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
                       if (outgoingTransactions)
                         await $_getPrefetchedData<
                           Wallet,
@@ -4989,6 +5853,7 @@ typedef $$WalletsTableProcessedTableManager =
       (Wallet, $$WalletsTableReferences),
       Wallet,
       PrefetchHooks Function({
+        bool fundsRefs,
         bool outgoingTransactions,
         bool incomingTransactions,
       })
@@ -6409,6 +7274,546 @@ typedef $$RecurringTemplatesTableProcessedTableManager =
       RecurringTemplate,
       PrefetchHooks Function({bool transactionsRefs})
     >;
+typedef $$FundsTableCreateCompanionBuilder =
+    FundsCompanion Function({
+      Value<int> id,
+      required String name,
+      required int walletId,
+      Value<int?> targetAmount,
+      Value<int?> dueDayKey,
+      Value<String?> note,
+      Value<String?> iconKey,
+      Value<int?> colorValue,
+      Value<bool> isArchived,
+      Value<int> sortOrder,
+      required int createdAt,
+      required int updatedAt,
+    });
+typedef $$FundsTableUpdateCompanionBuilder =
+    FundsCompanion Function({
+      Value<int> id,
+      Value<String> name,
+      Value<int> walletId,
+      Value<int?> targetAmount,
+      Value<int?> dueDayKey,
+      Value<String?> note,
+      Value<String?> iconKey,
+      Value<int?> colorValue,
+      Value<bool> isArchived,
+      Value<int> sortOrder,
+      Value<int> createdAt,
+      Value<int> updatedAt,
+    });
+
+final class $$FundsTableReferences
+    extends BaseReferences<_$AppDatabase, $FundsTable, Fund> {
+  $$FundsTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static $WalletsTable _walletIdTable(_$AppDatabase db) => db.wallets
+      .createAlias($_aliasNameGenerator(db.funds.walletId, db.wallets.id));
+
+  $$WalletsTableProcessedTableManager get walletId {
+    final $_column = $_itemColumn<int>('wallet_id')!;
+
+    final manager = $$WalletsTableTableManager(
+      $_db,
+      $_db.wallets,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_walletIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static MultiTypedResultKey<$TransactionsTable, List<Transaction>>
+  _transactionsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.transactions,
+    aliasName: $_aliasNameGenerator(db.funds.id, db.transactions.fundId),
+  );
+
+  $$TransactionsTableProcessedTableManager get transactionsRefs {
+    final manager = $$TransactionsTableTableManager(
+      $_db,
+      $_db.transactions,
+    ).filter((f) => f.fundId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_transactionsRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+}
+
+class $$FundsTableFilterComposer extends Composer<_$AppDatabase, $FundsTable> {
+  $$FundsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get targetAmount => $composableBuilder(
+    column: $table.targetAmount,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get dueDayKey => $composableBuilder(
+    column: $table.dueDayKey,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get note => $composableBuilder(
+    column: $table.note,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get iconKey => $composableBuilder(
+    column: $table.iconKey,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get colorValue => $composableBuilder(
+    column: $table.colorValue,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isArchived => $composableBuilder(
+    column: $table.isArchived,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get sortOrder => $composableBuilder(
+    column: $table.sortOrder,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$WalletsTableFilterComposer get walletId {
+    final $$WalletsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.walletId,
+      referencedTable: $db.wallets,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$WalletsTableFilterComposer(
+            $db: $db,
+            $table: $db.wallets,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  Expression<bool> transactionsRefs(
+    Expression<bool> Function($$TransactionsTableFilterComposer f) f,
+  ) {
+    final $$TransactionsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.transactions,
+      getReferencedColumn: (t) => t.fundId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$TransactionsTableFilterComposer(
+            $db: $db,
+            $table: $db.transactions,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+}
+
+class $$FundsTableOrderingComposer
+    extends Composer<_$AppDatabase, $FundsTable> {
+  $$FundsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get targetAmount => $composableBuilder(
+    column: $table.targetAmount,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get dueDayKey => $composableBuilder(
+    column: $table.dueDayKey,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get note => $composableBuilder(
+    column: $table.note,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get iconKey => $composableBuilder(
+    column: $table.iconKey,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get colorValue => $composableBuilder(
+    column: $table.colorValue,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isArchived => $composableBuilder(
+    column: $table.isArchived,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get sortOrder => $composableBuilder(
+    column: $table.sortOrder,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$WalletsTableOrderingComposer get walletId {
+    final $$WalletsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.walletId,
+      referencedTable: $db.wallets,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$WalletsTableOrderingComposer(
+            $db: $db,
+            $table: $db.wallets,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$FundsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $FundsTable> {
+  $$FundsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<int> get targetAmount => $composableBuilder(
+    column: $table.targetAmount,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get dueDayKey =>
+      $composableBuilder(column: $table.dueDayKey, builder: (column) => column);
+
+  GeneratedColumn<String> get note =>
+      $composableBuilder(column: $table.note, builder: (column) => column);
+
+  GeneratedColumn<String> get iconKey =>
+      $composableBuilder(column: $table.iconKey, builder: (column) => column);
+
+  GeneratedColumn<int> get colorValue => $composableBuilder(
+    column: $table.colorValue,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get isArchived => $composableBuilder(
+    column: $table.isArchived,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get sortOrder =>
+      $composableBuilder(column: $table.sortOrder, builder: (column) => column);
+
+  GeneratedColumn<int> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<int> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  $$WalletsTableAnnotationComposer get walletId {
+    final $$WalletsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.walletId,
+      referencedTable: $db.wallets,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$WalletsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.wallets,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  Expression<T> transactionsRefs<T extends Object>(
+    Expression<T> Function($$TransactionsTableAnnotationComposer a) f,
+  ) {
+    final $$TransactionsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.transactions,
+      getReferencedColumn: (t) => t.fundId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$TransactionsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.transactions,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+}
+
+class $$FundsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $FundsTable,
+          Fund,
+          $$FundsTableFilterComposer,
+          $$FundsTableOrderingComposer,
+          $$FundsTableAnnotationComposer,
+          $$FundsTableCreateCompanionBuilder,
+          $$FundsTableUpdateCompanionBuilder,
+          (Fund, $$FundsTableReferences),
+          Fund,
+          PrefetchHooks Function({bool walletId, bool transactionsRefs})
+        > {
+  $$FundsTableTableManager(_$AppDatabase db, $FundsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$FundsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$FundsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$FundsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<String> name = const Value.absent(),
+                Value<int> walletId = const Value.absent(),
+                Value<int?> targetAmount = const Value.absent(),
+                Value<int?> dueDayKey = const Value.absent(),
+                Value<String?> note = const Value.absent(),
+                Value<String?> iconKey = const Value.absent(),
+                Value<int?> colorValue = const Value.absent(),
+                Value<bool> isArchived = const Value.absent(),
+                Value<int> sortOrder = const Value.absent(),
+                Value<int> createdAt = const Value.absent(),
+                Value<int> updatedAt = const Value.absent(),
+              }) => FundsCompanion(
+                id: id,
+                name: name,
+                walletId: walletId,
+                targetAmount: targetAmount,
+                dueDayKey: dueDayKey,
+                note: note,
+                iconKey: iconKey,
+                colorValue: colorValue,
+                isArchived: isArchived,
+                sortOrder: sortOrder,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required String name,
+                required int walletId,
+                Value<int?> targetAmount = const Value.absent(),
+                Value<int?> dueDayKey = const Value.absent(),
+                Value<String?> note = const Value.absent(),
+                Value<String?> iconKey = const Value.absent(),
+                Value<int?> colorValue = const Value.absent(),
+                Value<bool> isArchived = const Value.absent(),
+                Value<int> sortOrder = const Value.absent(),
+                required int createdAt,
+                required int updatedAt,
+              }) => FundsCompanion.insert(
+                id: id,
+                name: name,
+                walletId: walletId,
+                targetAmount: targetAmount,
+                dueDayKey: dueDayKey,
+                note: note,
+                iconKey: iconKey,
+                colorValue: colorValue,
+                isArchived: isArchived,
+                sortOrder: sortOrder,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) =>
+                    (e.readTable(table), $$FundsTableReferences(db, table, e)),
+              )
+              .toList(),
+          prefetchHooksCallback:
+              ({walletId = false, transactionsRefs = false}) {
+                return PrefetchHooks(
+                  db: db,
+                  explicitlyWatchedTables: [
+                    if (transactionsRefs) db.transactions,
+                  ],
+                  addJoins:
+                      <
+                        T extends TableManagerState<
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic
+                        >
+                      >(state) {
+                        if (walletId) {
+                          state =
+                              state.withJoin(
+                                    currentTable: table,
+                                    currentColumn: table.walletId,
+                                    referencedTable: $$FundsTableReferences
+                                        ._walletIdTable(db),
+                                    referencedColumn: $$FundsTableReferences
+                                        ._walletIdTable(db)
+                                        .id,
+                                  )
+                                  as T;
+                        }
+
+                        return state;
+                      },
+                  getPrefetchedDataCallback: (items) async {
+                    return [
+                      if (transactionsRefs)
+                        await $_getPrefetchedData<
+                          Fund,
+                          $FundsTable,
+                          Transaction
+                        >(
+                          currentTable: table,
+                          referencedTable: $$FundsTableReferences
+                              ._transactionsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$FundsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).transactionsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.fundId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                    ];
+                  },
+                );
+              },
+        ),
+      );
+}
+
+typedef $$FundsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $FundsTable,
+      Fund,
+      $$FundsTableFilterComposer,
+      $$FundsTableOrderingComposer,
+      $$FundsTableAnnotationComposer,
+      $$FundsTableCreateCompanionBuilder,
+      $$FundsTableUpdateCompanionBuilder,
+      (Fund, $$FundsTableReferences),
+      Fund,
+      PrefetchHooks Function({bool walletId, bool transactionsRefs})
+    >;
 typedef $$TransactionsTableCreateCompanionBuilder =
     TransactionsCompanion Function({
       Value<int> id,
@@ -6425,6 +7830,7 @@ typedef $$TransactionsTableCreateCompanionBuilder =
       Value<String?> note,
       Value<String?> groupId,
       Value<int?> recurringId,
+      Value<int?> fundId,
       Value<bool> isWriteoff,
       required int createdAt,
       required int updatedAt,
@@ -6446,6 +7852,7 @@ typedef $$TransactionsTableUpdateCompanionBuilder =
       Value<String?> note,
       Value<String?> groupId,
       Value<int?> recurringId,
+      Value<int?> fundId,
       Value<bool> isWriteoff,
       Value<int> createdAt,
       Value<int> updatedAt,
@@ -6547,6 +7954,24 @@ final class $$TransactionsTableReferences
       $_db.recurringTemplates,
     ).filter((f) => f.id.sqlEquals($_column));
     final item = $_typedResult.readTableOrNull(_recurringIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static $FundsTable _fundIdTable(_$AppDatabase db) => db.funds.createAlias(
+    $_aliasNameGenerator(db.transactions.fundId, db.funds.id),
+  );
+
+  $$FundsTableProcessedTableManager? get fundId {
+    final $_column = $_itemColumn<int>('fund_id');
+    if ($_column == null) return null;
+    final manager = $$FundsTableTableManager(
+      $_db,
+      $_db.funds,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_fundIdTable($_db));
     if (item == null) return manager;
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: [item]),
@@ -6735,6 +8160,29 @@ class $$TransactionsTableFilterComposer
           }) => $$RecurringTemplatesTableFilterComposer(
             $db: $db,
             $table: $db.recurringTemplates,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$FundsTableFilterComposer get fundId {
+    final $$FundsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.fundId,
+      referencedTable: $db.funds,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$FundsTableFilterComposer(
+            $db: $db,
+            $table: $db.funds,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -6933,6 +8381,29 @@ class $$TransactionsTableOrderingComposer
     );
     return composer;
   }
+
+  $$FundsTableOrderingComposer get fundId {
+    final $$FundsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.fundId,
+      referencedTable: $db.funds,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$FundsTableOrderingComposer(
+            $db: $db,
+            $table: $db.funds,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
 }
 
 class $$TransactionsTableAnnotationComposer
@@ -7102,6 +8573,29 @@ class $$TransactionsTableAnnotationComposer
         );
     return composer;
   }
+
+  $$FundsTableAnnotationComposer get fundId {
+    final $$FundsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.fundId,
+      referencedTable: $db.funds,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$FundsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.funds,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
 }
 
 class $$TransactionsTableTableManager
@@ -7123,6 +8617,7 @@ class $$TransactionsTableTableManager
             bool categoryId,
             bool personId,
             bool recurringId,
+            bool fundId,
           })
         > {
   $$TransactionsTableTableManager(_$AppDatabase db, $TransactionsTable table)
@@ -7152,6 +8647,7 @@ class $$TransactionsTableTableManager
                 Value<String?> note = const Value.absent(),
                 Value<String?> groupId = const Value.absent(),
                 Value<int?> recurringId = const Value.absent(),
+                Value<int?> fundId = const Value.absent(),
                 Value<bool> isWriteoff = const Value.absent(),
                 Value<int> createdAt = const Value.absent(),
                 Value<int> updatedAt = const Value.absent(),
@@ -7171,6 +8667,7 @@ class $$TransactionsTableTableManager
                 note: note,
                 groupId: groupId,
                 recurringId: recurringId,
+                fundId: fundId,
                 isWriteoff: isWriteoff,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
@@ -7192,6 +8689,7 @@ class $$TransactionsTableTableManager
                 Value<String?> note = const Value.absent(),
                 Value<String?> groupId = const Value.absent(),
                 Value<int?> recurringId = const Value.absent(),
+                Value<int?> fundId = const Value.absent(),
                 Value<bool> isWriteoff = const Value.absent(),
                 required int createdAt,
                 required int updatedAt,
@@ -7211,6 +8709,7 @@ class $$TransactionsTableTableManager
                 note: note,
                 groupId: groupId,
                 recurringId: recurringId,
+                fundId: fundId,
                 isWriteoff: isWriteoff,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
@@ -7231,6 +8730,7 @@ class $$TransactionsTableTableManager
                 categoryId = false,
                 personId = false,
                 recurringId = false,
+                fundId = false,
               }) {
                 return PrefetchHooks(
                   db: db,
@@ -7326,6 +8826,21 @@ class $$TransactionsTableTableManager
                                   )
                                   as T;
                         }
+                        if (fundId) {
+                          state =
+                              state.withJoin(
+                                    currentTable: table,
+                                    currentColumn: table.fundId,
+                                    referencedTable:
+                                        $$TransactionsTableReferences
+                                            ._fundIdTable(db),
+                                    referencedColumn:
+                                        $$TransactionsTableReferences
+                                            ._fundIdTable(db)
+                                            .id,
+                                  )
+                                  as T;
+                        }
 
                         return state;
                       },
@@ -7356,6 +8871,7 @@ typedef $$TransactionsTableProcessedTableManager =
         bool categoryId,
         bool personId,
         bool recurringId,
+        bool fundId,
       })
     >;
 typedef $$BudgetsTableCreateCompanionBuilder =
@@ -7843,6 +9359,8 @@ class $AppDatabaseManager {
       $$PeopleTableTableManager(_db, _db.people);
   $$RecurringTemplatesTableTableManager get recurringTemplates =>
       $$RecurringTemplatesTableTableManager(_db, _db.recurringTemplates);
+  $$FundsTableTableManager get funds =>
+      $$FundsTableTableManager(_db, _db.funds);
   $$TransactionsTableTableManager get transactions =>
       $$TransactionsTableTableManager(_db, _db.transactions);
   $$BudgetsTableTableManager get budgets =>

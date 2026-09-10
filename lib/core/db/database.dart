@@ -20,6 +20,7 @@ part 'database.g.dart';
     Transactions,
     RecurringTemplates,
     Budgets,
+    Funds,
     SettingsKv,
   ],
 )
@@ -30,7 +31,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.e);
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -39,10 +40,25 @@ class AppDatabase extends _$AppDatabase {
           await _createIndexes();
           await _seed();
         },
-        // Từ phiên bản 2 trở đi, mỗi lần đổi cấu trúc bảng phải thêm một nhánh
-        // vào đây. Bỏ qua bước này thì app sẽ chết ngay khi mở trên máy đang có
-        // dữ liệu cũ.
-        onUpgrade: (m, from, to) async {},
+        // Mỗi lần đổi cấu trúc bảng phải thêm một nhánh vào đây. Bỏ qua bước
+        // này thì app chết ngay khi mở trên máy đang có dữ liệu cũ.
+        //
+        // Dùng `if (from < n)` chứ không phải `else if`: máy bỏ lỡ vài bản cập
+        // nhật sẽ chạy tuần tự qua mọi bước còn thiếu.
+        onUpgrade: (m, from, to) async {
+          // v2: thêm quỹ để dành tiền cho các khoản đã biết trước.
+          if (from < 2) {
+            await m.createTable(funds);
+            await m.addColumn(transactions, transactions.fundId);
+            await customStatement(
+              'CREATE INDEX IF NOT EXISTS ix_tx_fund ON transactions(fund_id) '
+              'WHERE deleted_at IS NULL',
+            );
+            await customStatement(
+              'CREATE INDEX IF NOT EXISTS ix_funds_wallet ON funds(wallet_id)',
+            );
+          }
+        },
         beforeOpen: (details) async {
           // SQLite mặc định TẮT ràng buộc khoá ngoại. Không bật thì mọi
           // `references(...)` ở trên đều vô tác dụng.
@@ -69,6 +85,9 @@ class AppDatabase extends _$AppDatabase {
       'CREATE INDEX IF NOT EXISTS ix_tx_category ON transactions(category_id, month_key) '
           'WHERE deleted_at IS NULL',
       'CREATE INDEX IF NOT EXISTS ix_tx_group ON transactions(group_id)',
+      'CREATE INDEX IF NOT EXISTS ix_tx_fund ON transactions(fund_id) '
+          'WHERE deleted_at IS NULL',
+      'CREATE INDEX IF NOT EXISTS ix_funds_wallet ON funds(wallet_id)',
       'CREATE INDEX IF NOT EXISTS ix_recurring_due ON recurring_templates(is_active, next_due_at)',
       'CREATE UNIQUE INDEX IF NOT EXISTS ux_budget ON budgets(category_id, month_key)',
     ];

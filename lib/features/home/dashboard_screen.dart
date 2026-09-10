@@ -57,47 +57,92 @@ class DashboardScreen extends ConsumerWidget {
   }
 }
 
+/// Tổng tài sản, mặc định chỉ tính phần thực sự tiêu được.
+///
+/// Tiền quỹ đã có chỗ đến rồi nên gộp vào đây dễ làm mình tưởng còn nhiều tiền
+/// hơn thực tế. Bấm con mắt thì mới hiện thêm phần quỹ.
 class _TotalAssetsCard extends ConsumerWidget {
   const _TotalAssetsCard();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final total = ref.watch(totalAssetsProvider);
+    final spendable = ref.watch(spendableAssetsProvider);
+    final inFunds = ref.watch(totalInFundsProvider).valueOrNull ?? 0;
+    final showFunds = ref.watch(showFundsInTotalProvider);
     final scheme = Theme.of(context).colorScheme;
+
+    final value = spendable.valueOrNull;
+    final shown = value == null ? null : (showFunds ? value + inFunds : value);
 
     return Card(
       color: scheme.primaryContainer,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 22),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Tổng tài sản',
-              style: TextStyle(
-                color: scheme.onPrimaryContainer.withValues(alpha: 0.75),
-                fontSize: 13,
-                letterSpacing: 0.3,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: inFunds == 0
+            ? null
+            : () => ref.read(showFundsInTotalProvider.notifier).state =
+                !showFunds,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 22),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Text(
+                    showFunds && inFunds > 0
+                        ? 'Tổng tài sản, tính cả quỹ'
+                        : 'Tiền tiêu được',
+                    style: TextStyle(
+                      color:
+                          scheme.onPrimaryContainer.withValues(alpha: 0.75),
+                      fontSize: 13,
+                      letterSpacing: 0.3,
+                    ),
+                  ),
+                  if (inFunds > 0) ...[
+                    const SizedBox(width: 6),
+                    Icon(
+                      showFunds
+                          ? Icons.visibility_outlined
+                          : Icons.visibility_off_outlined,
+                      size: 16,
+                      color:
+                          scheme.onPrimaryContainer.withValues(alpha: 0.7),
+                    ),
+                  ],
+                ],
               ),
-            ),
-            const SizedBox(height: 6),
-            total.when(
-              loading: () => const SizedBox(
-                height: 40,
-                child: Center(child: CircularProgressIndicator()),
-              ),
-              error: (e, _) => Text('Lỗi: $e'),
-              data: (value) => Text(
-                formatVnd(value),
-                style: TextStyle(
-                  fontSize: 30,
-                  fontWeight: FontWeight.bold,
-                  color: scheme.onPrimaryContainer,
-                  fontFeatures: const [FontFeature.tabularFigures()],
+              const SizedBox(height: 6),
+              if (shown == null)
+                const SizedBox(
+                  height: 40,
+                  child: Center(child: CircularProgressIndicator()),
+                )
+              else
+                Text(
+                  formatVnd(shown),
+                  style: TextStyle(
+                    fontSize: 30,
+                    fontWeight: FontWeight.bold,
+                    color: scheme.onPrimaryContainer,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
                 ),
-              ),
-            ),
-          ],
+              if (inFunds > 0) ...[
+                const SizedBox(height: 8),
+                Text(
+                  showFunds
+                      ? 'Trong đó ${formatVnd(inFunds)} đã dành cho quỹ'
+                      : 'Chưa tính ${formatVnd(inFunds)} đang để dành',
+                  style: TextStyle(
+                    color: scheme.onPrimaryContainer.withValues(alpha: 0.75),
+                    fontSize: 12.5,
+                  ),
+                ),
+              ],
+            ],
+          ),
         ),
       ),
     );

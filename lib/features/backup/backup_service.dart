@@ -14,7 +14,7 @@ import '../../core/format/dates.dart';
 ///
 /// Tăng lên mỗi khi cấu trúc file đổi, để bản app cũ biết mà từ chối file mới
 /// thay vì đọc bừa rồi hỏng dữ liệu.
-const kBackupFormatVersion = 1;
+const kBackupFormatVersion = 2;
 
 class BackupStats {
   const BackupStats({
@@ -23,6 +23,7 @@ class BackupStats {
     required this.people,
     required this.transactions,
     required this.budgets,
+    required this.funds,
   });
 
   final int wallets;
@@ -30,8 +31,9 @@ class BackupStats {
   final int people;
   final int transactions;
   final int budgets;
+  final int funds;
 
-  int get total => wallets + categories + people + transactions + budgets;
+  int get total => wallets + categories + people + transactions + budgets + funds;
 }
 
 /// Cách xử lý khi nhập một file sao lưu.
@@ -67,6 +69,7 @@ class BackupService {
     final people = await db.select(db.people).get();
     final transactions = await db.select(db.transactions).get();
     final budgets = await db.select(db.budgets).get();
+    final funds = await db.select(db.funds).get();
 
     final data = <String, dynamic>{
       'formatVersion': kBackupFormatVersion,
@@ -78,6 +81,7 @@ class BackupService {
       'people': people.map(_personToMap).toList(),
       'transactions': transactions.map(_transactionToMap).toList(),
       'budgets': budgets.map(_budgetToMap).toList(),
+      'funds': funds.map(_fundToMap).toList(),
     };
 
     return const JsonEncoder.withIndent('  ').convert(data);
@@ -168,6 +172,7 @@ class BackupService {
       people: (data['people'] as List).length,
       transactions: (data['transactions'] as List).length,
       budgets: (data['budgets'] as List?)?.length ?? 0,
+      funds: (data['funds'] as List?)?.length ?? 0,
     );
   }
 
@@ -191,12 +196,15 @@ class BackupService {
     final txRows = (data['transactions'] as List).cast<Map<String, dynamic>>();
     final budgetRows =
         ((data['budgets'] as List?) ?? const []).cast<Map<String, dynamic>>();
+    final fundRows =
+        ((data['funds'] as List?) ?? const []).cast<Map<String, dynamic>>();
 
     await db.transaction(() async {
       if (mode == ImportMode.replace) {
         // Xoá theo thứ tự ngược với phụ thuộc khoá ngoại.
         await db.delete(db.transactions).go();
         await db.delete(db.budgets).go();
+        await db.delete(db.funds).go();
         await db.delete(db.wallets).go();
         await db.delete(db.categories).go();
         await db.delete(db.people).go();
@@ -252,6 +260,27 @@ class BackupService {
             );
       }
 
+      final fundIds = <int, int>{};
+      for (final row in fundRows) {
+        final walletId = walletIds[row['walletId']];
+        if (walletId == null) continue;
+        fundIds[row['id'] as int] = await db.into(db.funds).insert(
+              FundsCompanion.insert(
+                name: row['name'] as String,
+                walletId: walletId,
+                targetAmount: Value(row['targetAmount'] as int?),
+                dueDayKey: Value(row['dueDayKey'] as int?),
+                note: Value(row['note'] as String?),
+                iconKey: Value(row['iconKey'] as String?),
+                colorValue: Value(row['colorValue'] as int?),
+                isArchived: Value(row['isArchived'] as bool? ?? false),
+                sortOrder: Value(row['sortOrder'] as int? ?? 0),
+                createdAt: row['createdAt'] as int? ?? 0,
+                updatedAt: row['updatedAt'] as int? ?? 0,
+              ),
+            );
+      }
+
       for (final row in txRows) {
         final kind = TxKindX.fromId(row['kind'] as String);
         final amount = row['amount'] as int;
@@ -271,6 +300,7 @@ class BackupService {
                 walletToId: Value(walletIds[row['walletToId']]),
                 categoryId: Value(categoryIds[row['categoryId']]),
                 personId: Value(personIds[row['personId']]),
+                fundId: Value(fundIds[row['fundId']]),
                 // Tính lại từ kind, không tin số trong file.
                 debtDelta: Value(kind.debtDelta(amount)),
                 note: Value(row['note'] as String?),
@@ -306,6 +336,7 @@ class BackupService {
         people: peopleRows.length,
         transactions: txRows.length,
         budgets: budgetRows.length,
+        funds: fundRows.length,
       ),
     );
   }
@@ -398,6 +429,7 @@ class BackupService {
         'walletToId': t.walletToId,
         'categoryId': t.categoryId,
         'personId': t.personId,
+        'fundId': t.fundId,
         'debtDelta': t.debtDelta,
         'note': t.note,
         'groupId': t.groupId,
@@ -405,6 +437,21 @@ class BackupService {
         'createdAt': t.createdAt,
         'updatedAt': t.updatedAt,
         'deletedAt': t.deletedAt,
+      };
+
+  Map<String, dynamic> _fundToMap(Fund f) => {
+        'id': f.id,
+        'name': f.name,
+        'walletId': f.walletId,
+        'targetAmount': f.targetAmount,
+        'dueDayKey': f.dueDayKey,
+        'note': f.note,
+        'iconKey': f.iconKey,
+        'colorValue': f.colorValue,
+        'isArchived': f.isArchived,
+        'sortOrder': f.sortOrder,
+        'createdAt': f.createdAt,
+        'updatedAt': f.updatedAt,
       };
 
   Map<String, dynamic> _budgetToMap(Budget b) => {

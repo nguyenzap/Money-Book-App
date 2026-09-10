@@ -66,6 +66,7 @@ class _TxEditorScreenState extends ConsumerState<TxEditorScreen> {
   int? _walletToId;
   int? _categoryId;
   int? _personId;
+  int? _fundId;
   late DateTime _occurredAt;
 
   /// Chia tiền một hoá đơn. Chỉ áp dụng khi ghi mới một khoản chi — sửa một
@@ -89,6 +90,7 @@ class _TxEditorScreenState extends ConsumerState<TxEditorScreen> {
       _walletToId = editing.tx.walletToId;
       _categoryId = editing.tx.categoryId;
       _personId = editing.tx.personId;
+      _fundId = editing.tx.fundId;
       _occurredAt =
           DateTime.fromMillisecondsSinceEpoch(editing.tx.occurredAt);
     } else {
@@ -128,8 +130,11 @@ class _TxEditorScreenState extends ConsumerState<TxEditorScreen> {
       if (!next.needsCategory) _categoryId = null;
       if (!next.needsPerson) _personId = null;
 
-      // Chia tiền chỉ có nghĩa với một khoản chi.
-      if (next != TxKind.expense) _split.enabled = false;
+      // Chia tiền và lấy từ quỹ chỉ có nghĩa với một khoản chi.
+      if (next != TxKind.expense) {
+        _split.enabled = false;
+        _fundId = null;
+      }
 
       if (next == TxKind.transfer) {
         _walletFromId ??= _walletToId;
@@ -236,6 +241,7 @@ class _TxEditorScreenState extends ConsumerState<TxEditorScreen> {
         walletToId: _walletToId,
         categoryId: _categoryId,
         personId: _personId,
+        fundId: _fundId,
         note: note.isEmpty ? null : note,
       );
     } else {
@@ -247,6 +253,7 @@ class _TxEditorScreenState extends ConsumerState<TxEditorScreen> {
         walletToId: _walletToId,
         categoryId: _categoryId,
         personId: _personId,
+        fundId: _fundId,
         note: note.isEmpty ? null : note,
       );
     }
@@ -337,6 +344,13 @@ class _TxEditorScreenState extends ConsumerState<TxEditorScreen> {
                 ),
                 const SizedBox(height: 20),
                 ..._buildFieldsForKind(walletList),
+                if (_kind == TxKind.expense) ...[
+                  const SizedBox(height: 12),
+                  _FundPicker(
+                    value: _fundId,
+                    onChanged: (v) => setState(() => _fundId = v),
+                  ),
+                ],
                 if (_canSplit) ...[
                   const SizedBox(height: 8),
                   SplitBillSection(
@@ -711,6 +725,68 @@ class _CategoryPicker extends ConsumerWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Chọn quỹ để lấy tiền ra chi.
+///
+/// Chỉ hiện khi có quỹ. Chọn quỹ nào thì khoản chi vừa trừ ví vừa trừ quỹ đó —
+/// đúng như thực tế: tiền quỹ vốn đã nằm trong ví, giờ mới thực sự tiêu.
+class _FundPicker extends ConsumerWidget {
+  const _FundPicker({required this.value, required this.onChanged});
+
+  final int? value;
+  final ValueChanged<int?> onChanged;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final funds = ref.watch(fundsProvider).valueOrNull ?? const <FundProgress>[];
+    if (funds.isEmpty) return const SizedBox.shrink();
+
+    final scheme = Theme.of(context).colorScheme;
+    final selected = funds.where((f) => f.id == value).firstOrNull;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Lấy từ quỹ', style: Theme.of(context).textTheme.labelLarge),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            ChoiceChip(
+              selected: value == null,
+              onSelected: (_) => onChanged(null),
+              showCheckmark: false,
+              label: const Text('Không'),
+            ),
+            for (final f in funds)
+              ChoiceChip(
+                selected: value == f.id,
+                onSelected: (_) => onChanged(f.id),
+                showCheckmark: false,
+                avatar: Icon(
+                  iconFor(f.fund.iconKey, fallback: Icons.savings),
+                  size: 18,
+                  color: f.fund.colorValue == null
+                      ? null
+                      : Color(f.fund.colorValue!),
+                ),
+                label: Text('${f.name} · ${formatVndShort(f.saved)}'),
+              ),
+          ],
+        ),
+        if (selected != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            'Trừ vào quỹ ${selected.name}, đang có '
+            '${formatVnd(selected.saved)} ở ${selected.walletName}.',
+            style: TextStyle(fontSize: 12, color: scheme.outline),
+          ),
+        ],
+      ],
     );
   }
 }

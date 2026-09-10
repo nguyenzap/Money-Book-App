@@ -36,6 +36,14 @@ const kIconMap = <String, IconData>{
   'bonus': Icons.emoji_events,
   'invest': Icons.trending_up,
 
+  // Quỹ
+  'piggy': Icons.savings,
+  'house': Icons.house,
+  'electric': Icons.bolt,
+  'water': Icons.water_drop,
+  'credit_debt': Icons.credit_score,
+  'target': Icons.flag,
+
   // Chung
   'other': Icons.more_horiz,
   'star': Icons.star,
@@ -79,4 +87,20 @@ const kCategoryIconKeys = [
   'star',
   'heart',
   'other',
+];
+
+/// Icon gợi ý cho quỹ: những khoản người ta hay để dành trước.
+const kFundIconKeys = [
+  'piggy',
+  'house',
+  'electric',
+  'water',
+  'phone_bill',
+  'credit_debt',
+  'study',
+  'travel',
+  'gift',
+  'health',
+  'car',
+  'target',
 ];
