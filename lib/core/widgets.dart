@@ -284,6 +284,9 @@ Future<bool> confirmDialog(
 }
 
 /// Thông báo ngắn ở đáy màn hình.
+///
+/// Tự tắt nhanh và vuốt đi được, vì nó nổi lên trên nội dung. Thông báo có nút
+/// (thường là "Hoàn tác") được ở lâu hơn một chút để kịp bấm.
 void showSnack(BuildContext context, String message, {SnackBarAction? action}) {
   ScaffoldMessenger.of(context)
     ..hideCurrentSnackBar()
@@ -292,7 +295,8 @@ void showSnack(BuildContext context, String message, {SnackBarAction? action}) {
         content: Text(message),
         action: action,
         behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 5),
+        dismissDirection: DismissDirection.horizontal,
+        duration: Duration(seconds: action == null ? 2 : 4),
       ),
     );
 }

@@ -129,12 +129,12 @@ class _TotalAssetsCard extends ConsumerWidget {
                     fontFeatures: const [FontFeature.tabularFigures()],
                   ),
                 ),
-              if (inFunds > 0) ...[
+              // Khi mắt nhắm thì không hé lộ phần để dành — chỉ con số tiêu
+              // được. Muốn biết thì bấm con mắt.
+              if (inFunds > 0 && showFunds) ...[
                 const SizedBox(height: 8),
                 Text(
-                  showFunds
-                      ? 'Trong đó ${formatVnd(inFunds)} đã dành cho quỹ'
-                      : 'Chưa tính ${formatVnd(inFunds)} đang để dành',
+                  'Trong đó ${formatVnd(inFunds)} đã dành cho quỹ',
                   style: TextStyle(
                     color: scheme.onPrimaryContainer.withValues(alpha: 0.75),
                     fontSize: 12.5,
