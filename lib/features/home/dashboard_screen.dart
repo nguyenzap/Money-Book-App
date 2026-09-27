@@ -11,6 +11,7 @@ import '../../core/theme.dart';
 import '../../core/widgets.dart';
 import '../settings/settings_screen.dart';
 import 'budget_today_section.dart';
+import 'free_money_section.dart';
 import '../transactions/tx_editor_screen.dart';
 import '../transactions/tx_tile.dart';
 import '../wallets/wallet_detail_screen.dart';
@@ -41,6 +42,10 @@ class DashboardScreen extends ConsumerWidget {
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
         children: const [
           _TotalAssetsCard(),
+          SizedBox(height: 12),
+          // Ngay dưới số tiền đang có là câu hỏi quan trọng hơn: trong đó bao
+          // nhiêu được tiêu thoải mái mà không đụng tới tiền ăn.
+          FreeMoneySection(),
           SizedBox(height: 20),
           // Ngân sách nằm ngay dưới tổng tài sản: đây là con số quyết định
           // bữa trưa hôm nay, không phải thứ phải đi tìm trong Cài đặt.

@@ -10,6 +10,7 @@ import '../../core/providers.dart';
 import '../../core/widgets.dart';
 import '../categories/category_edit_screen.dart';
 import '../people/person_edit_screen.dart';
+import 'spend_impact_note.dart';
 import 'split_bill_section.dart';
 
 /// Mở màn hình ghi giao dịch. Gom một chỗ để mọi nơi trong app gọi giống nhau.
@@ -337,10 +338,9 @@ class _TxEditorScreenState extends ConsumerState<TxEditorScreen> {
                   label: _canSplit && _split.enabled
                       ? 'Tổng hoá đơn'
                       : 'Số tiền',
-                  onChanged: (_) {
-                    // Chia đều phụ thuộc vào tổng nên phải vẽ lại bảng chia.
-                    if (_canSplit && _split.enabled) setState(() {});
-                  },
+                  // Bảng chia tiền và dòng "khoản này lấy tiền từ đâu" đều phụ
+                  // thuộc vào số tiền nên phải vẽ lại theo từng phím.
+                  onChanged: (_) => setState(() {}),
                 ),
                 const SizedBox(height: 20),
                 ..._buildFieldsForKind(walletList),
@@ -360,6 +360,7 @@ class _TxEditorScreenState extends ConsumerState<TxEditorScreen> {
                   ),
                 ],
                 const SizedBox(height: 12),
+                _impactNote(),
                 ListTile(
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -407,6 +408,34 @@ class _TxEditorScreenState extends ConsumerState<TxEditorScreen> {
         ),
       ),
     );
+  }
+
+  /// Khoản chi này lấy tiền từ đâu. Chỉ hiện khi ghi mới một khoản làm tiền
+  /// ra khỏi ví trong tháng này — sửa khoản cũ thì số tự do đã tính nó rồi, còn
+  /// chi từ quỹ thì không đụng tới tiền tự do.
+  Widget _impactNote() {
+    const none = SizedBox.shrink();
+    if (_isEditing) return none;
+    final today = ref.watch(todayProvider);
+    if (monthKeyOf(_occurredAt) != monthKeyOf(today)) return none;
+
+    final total = parseVnd(_amountController.text);
+    final Widget note;
+    if (_kind == TxKind.lend) {
+      note = SpendImpactNote(amount: 0, categoryId: null, outside: total);
+    } else if (_kind != TxKind.expense || _fundId != null) {
+      return none;
+    } else if (_canSplit && _split.enabled) {
+      final mine = _split.myShareFor(total);
+      note = SpendImpactNote(
+        amount: mine,
+        categoryId: _categoryId,
+        outside: total - mine,
+      );
+    } else {
+      note = SpendImpactNote(amount: total, categoryId: _categoryId);
+    }
+    return Padding(padding: const EdgeInsets.only(bottom: 12), child: note);
   }
 
   List<Widget> _buildFieldsForKind(List<WalletWithBalance> wallets) {

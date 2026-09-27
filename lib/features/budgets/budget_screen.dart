@@ -17,6 +17,11 @@ class BudgetScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final monthKey = ref.watch(selectedMonthProvider);
     final budgets = ref.watch(budgetsProvider(monthKey));
+    // Số dư ví hôm nay chỉ có nghĩa với tháng này.
+    final isCurrent = monthKey == monthKeyOf(ref.watch(todayProvider));
+    final cash = isCurrent
+        ? ref.watch(spendableAssetsProvider).valueOrNull
+        : null;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Ngân sách')),
@@ -56,6 +61,7 @@ class BudgetScreen extends ConsumerWidget {
                 limit: totalLimit,
                 spent: totalSpent,
                 monthKey: monthKey,
+                cash: cash,
               ),
               const SizedBox(height: 20),
               for (final b in list) ...[
@@ -125,11 +131,15 @@ class _OverallCard extends StatelessWidget {
     required this.limit,
     required this.spent,
     required this.monthKey,
+    this.cash,
   });
 
   final int limit;
   final int spent;
   final int monthKey;
+
+  /// Tiền tiêu được trong ví, null nếu không xét (tháng đã qua).
+  final int? cash;
 
   @override
   Widget build(BuildContext context) {
@@ -148,7 +158,7 @@ class _OverallCard extends StatelessWidget {
       monthKey: monthKey,
       daysInMonth: daysInMonth(monthKey),
       daysElapsed: daysElapsedIn(monthKey),
-    );
+    ).withCashCap(cash);
 
     return Card(
       color: scheme.surfaceContainerHigh,
@@ -203,11 +213,15 @@ class _OverallCard extends StatelessWidget {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      overall.remaining > 0
+                      overall.spendable > 0
                           ? 'Còn ${overall.daysRemaining} ngày · '
-                              '${formatVnd(overall.remainingDailyAllowance)}'
-                              '/ngày'
-                          : 'Còn ${overall.daysRemaining} ngày, đã hết hạn mức',
+                                '${formatVnd(overall.remainingDailyAllowance)}'
+                                '/ngày'
+                          : overall.remaining > 0
+                          ? 'Còn ${overall.daysRemaining} ngày, ví đã hết '
+                                'tiền tiêu được'
+                          : 'Còn ${overall.daysRemaining} ngày, đã hết '
+                                'hạn mức',
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w500,
@@ -218,6 +232,19 @@ class _OverallCard extends StatelessWidget {
                   _PaceBadge(pace: overall.pace),
                 ],
               ),
+              if (overall.isLimitedByCash) ...[
+                const SizedBox(height: 10),
+                Text(
+                  'Ví chỉ còn ${formatVnd(overall.spendable)} tiêu được, ít '
+                  'hơn ${formatVnd(overall.remaining)} còn lại của các hạn '
+                  'mức. Mức mỗi ngày ở trên đã tính theo tiền thật.',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: paceStyle(context, BudgetPace.fast).color,
+                  ),
+                ),
+              ],
             ],
           ],
         ),
@@ -445,6 +472,49 @@ class PaceMarkerBar extends StatelessWidget {
 /// Màu và biểu tượng ứng với từng tình trạng nhịp độ.
 ///
 /// Luôn đi kèm biểu tượng và chữ, không bao giờ chỉ dựa vào màu.
+/// Cảnh báo tiền thật trong ví không còn đủ cho phần còn lại của hạn mức.
+///
+/// Hạn mức chỉ đếm chi tiêu của đúng danh mục đó, nên tiêu lố ở chỗ khác thì
+/// hạn mức vẫn báo "còn nhiều" trong khi ví đã cạn. Dòng này nói thẳng ra.
+class CashLimitNote extends StatelessWidget {
+  const CashLimitNote({super.key, required this.progress});
+
+  final BudgetProgress progress;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!progress.isLimitedByCash) return const SizedBox.shrink();
+    final style = paceStyle(context, BudgetPace.fast);
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 1),
+          child: Icon(
+            Icons.account_balance_wallet_outlined,
+            size: 14,
+            color: style.color,
+          ),
+        ),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(
+            'Tiền trong ví chỉ còn đủ ${formatVnd(progress.spendable)} cho '
+            'mục này, ít hơn ${formatVnd(progress.remaining)} còn lại của hạn '
+            'mức — phần chênh đã tiêu sang khoản khác.',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: style.color,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 ({Color color, IconData icon, String label}) paceStyle(
   BuildContext context,
   BudgetPace pace,
@@ -489,8 +559,7 @@ class BudgetPaceRow extends StatelessWidget {
 
     final scheme = Theme.of(context).colorScheme;
     final style = paceStyle(context, progress.pace);
-    final canStillSpend =
-        progress.daysRemaining > 0 && progress.remaining > 0;
+    final canStillSpend = progress.daysRemaining > 0 && progress.spendable > 0;
 
     return Container(
       width: double.infinity,
@@ -527,6 +596,10 @@ class BudgetPaceRow extends StatelessWidget {
                 : _fallbackDetail(),
             style: TextStyle(fontSize: 12.5, color: scheme.onSurfaceVariant),
           ),
+          if (progress.isLimitedByCash) ...[
+            const SizedBox(height: 6),
+            CashLimitNote(progress: progress),
+          ],
           if (progress.pace == BudgetPace.fast &&
               progress.daysUntilRunOut != null) ...[
             const SizedBox(height: 4),
@@ -562,6 +635,9 @@ class BudgetPaceRow extends StatelessWidget {
   String _fallbackDetail() {
     if (progress.remaining <= 0) {
       return 'Hạn mức tháng này đã dùng hết.';
+    }
+    if (progress.daysRemaining > 0) {
+      return 'Ví đã hết tiền tiêu được dù hạn mức vẫn còn.';
     }
     return 'Hết tháng rồi, còn dư ${formatVnd(progress.remaining)}.';
   }

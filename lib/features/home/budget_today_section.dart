@@ -101,6 +101,15 @@ class _BudgetTodayRow extends StatelessWidget {
     final target = progress.budgetForToday(spentToday);
     final left = progress.leftForToday(spentToday);
     final overToday = left < 0;
+    // Quên ghi hôm qua rồi sáng nay mới ghi bù thì không có lúc nào "hôm nay
+    // lố" cả, nhưng mốc hôm nay vẫn bị hạ. Nói rõ lý do để khỏi tưởng app
+    // bỏ qua khoản đó.
+    final carriedOver = progress.overspentBeforeToday(spentToday);
+    final showCarriedOver =
+        !overToday &&
+        !progress.isOver &&
+        carriedOver > 0 &&
+        target < progress.dailyAllowance;
     // Thanh vơi dần chứ không đầy dần: tiền đang hết đi thì thanh phải ngắn
     // lại, nhìn là hiểu ngay mà không cần đọc số.
     final barValue = progress.remainingRatioToday(spentToday);
@@ -185,6 +194,19 @@ class _BudgetTodayRow extends StatelessWidget {
               ),
               const SizedBox(height: 4),
             ],
+            if (showCarriedOver) ...[
+              Text(
+                'Những ngày trước tiêu quá ${formatVnd(carriedOver)}, nên mốc '
+                'hôm nay hạ từ ${formatVndShort(progress.dailyAllowance)} '
+                'xuống ${formatVndShort(target)}.',
+                style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
+              ),
+              const SizedBox(height: 4),
+            ],
+            if (progress.isLimitedByCash) ...[
+              CashLimitNote(progress: progress),
+              const SizedBox(height: 4),
+            ],
             Text(
               _detail(context),
               style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
@@ -205,7 +227,9 @@ class _BudgetTodayRow extends StatelessWidget {
     }
 
     final perDay = formatVnd(progress.remainingDailyAllowance);
-    final left = 'Còn ${formatVnd(progress.remaining)} cho '
+    // Hết tiền thật trước khi hết hạn mức thì chia theo tiền thật.
+    final left =
+        'Còn ${formatVnd(progress.spendable)} cho '
         '${progress.daysRemaining} ngày · $perDay/ngày';
 
     return switch (progress.pace) {

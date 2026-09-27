@@ -7,7 +7,7 @@ trong máy, không server, không tài khoản.
 
 ```powershell
 flutter run -d <device>                 # dev, hot reload bằng phím r
-flutter test                            # 214 test, chạy trong ~2 giây
+flutter test                            # 243 test, chạy trong ~2 giây
 flutter analyze
 dart run build_runner build             # BẮT BUỘC sau khi sửa lib/core/db/tables.dart
 flutter build apk --release --target-platform android-arm64
@@ -113,6 +113,31 @@ bản chất nó là một khoản chi. `Repository.addSplitBill` sinh ra một 
 Đây là lý do cả thống kê lẫn ngân sách đều chỉ đếm `expense`: một bữa 200k chia
 bốn người làm ví trừ đủ 200k nhưng chỉ 50k vào chi tiêu, nên trả dùm không bao
 giờ làm vượt hạn mức oan. Chia lẻ thì phần dư dồn vào mình để tổng khớp hoá đơn.
+
+## Ngân sách và tiền thật
+
+Hạn mức chỉ đếm chi tiêu của đúng danh mục đó, nên tiêu lố ở mục khác thì hạn
+mức vẫn báo "còn nhiều" trong khi ví đã cạn. Vì vậy với tháng hiện tại,
+`budgetsProvider` chặn phần còn tiêu được bằng `spendableAssets` qua
+`capBudgetsByCash` (nhiều hạn mức thì chia theo tỉ lệ phần còn lại).
+`remaining` vẫn là số của hạn mức; mọi con số "mỗi ngày được tiêu" dùng
+`spendable`. Tháng đã qua không bị chặn.
+
+Mọi thứ phụ thuộc "hôm nay" phải xem `todayProvider` (tự đổi qua nửa đêm và khi
+app quay lại từ nền), không gọi `DateTime.now()` lúc dựng provider — provider
+không bị dựng lại nên app để nền qua đêm sẽ tính theo ngày hôm qua.
+
+## Tiền tự do
+
+`lib/core/domain/free_money.dart`. Tiền tự do = tiền tiêu được − phần hạn mức
+còn lại của mọi ngân sách tháng này − nợ mình phải trả. Trừ nợ để vay/trả nợ
+không làm con số nhảy (tiền và nợ đi cùng nhau). Mốc hôm nay chia đều tới hết
+tháng, cùng cách với ngân sách từng mục (cộng lại phần đã tiêu hôm nay rồi mới
+chia). "Đã tiêu tự do hôm nay" = chi vào mục không có hạn mức + cho mượn, không
+tính chi từ quỹ (`watchSpentOutsideBudgetsOnDay`).
+
+`FreeMoney.preview` cho biết một khoản chi sắp ghi lấy từ hạn mức, từ tiền tự
+do, hay lấn vào tiền đã giữ — hiện ở màn ghi giao dịch trước khi bấm Ghi.
 
 ## Quỹ
 

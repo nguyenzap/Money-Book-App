@@ -553,6 +553,7 @@ class Repository {
     int? walletId,
     int? personId,
     int? categoryId,
+    bool uncategorized = false,
     int? monthKey,
     TxKind? kind,
   }) {
@@ -570,6 +571,9 @@ class Repository {
     if (categoryId != null) {
       where.add('t.category_id = ?');
       vars.add(Variable.withInt(categoryId));
+    }
+    if (uncategorized) {
+      where.add('t.category_id IS NULL');
     }
     if (monthKey != null) {
       where.add('t.month_key = ?');
@@ -1001,9 +1005,13 @@ class Repository {
   ///
   /// Số đã tiêu chỉ đếm giao dịch `expense`, nên tiền trả dùm cho bạn bè —
   /// vốn được ghi thành các khoản `lend` — không làm vượt ngân sách oan.
-  Stream<List<BudgetProgress>> watchBudgets(int monthKey) {
-    return db.customSelect(
-      '''
+  ///
+  /// [now] là mốc "hôm nay" để tính số ngày đã qua; truyền vào để nơi gọi đổi
+  /// được mốc khi qua nửa đêm mà không cần đợi dữ liệu thay đổi.
+  Stream<List<BudgetProgress>> watchBudgets(int monthKey, {DateTime? now}) {
+    return db
+        .customSelect(
+          '''
       SELECT b.id            AS budget_id,
              b.limit_amount  AS limit_amount,
              b.month_key     AS budget_month,
@@ -1024,29 +1032,33 @@ class Repository {
         AND c.is_archived = 0
       ORDER BY c.sort_order, c.id
       ''',
-      variables: [Variable.withInt(monthKey), Variable.withInt(monthKey)],
-      readsFrom: {db.budgets, db.categories, db.transactions},
-    ).watch().map((rows) {
-      // Tính một lần cho cả danh sách thay vì lặp lại ở từng dòng.
-      final totalDays = daysInMonth(monthKey);
-      final elapsed = daysElapsedIn(monthKey);
+          variables: [Variable.withInt(monthKey), Variable.withInt(monthKey)],
+          readsFrom: {db.budgets, db.categories, db.transactions},
+        )
+        .watch()
+        .map((rows) {
+          // Tính một lần cho cả danh sách thay vì lặp lại ở từng dòng.
+          final totalDays = daysInMonth(monthKey);
+          final elapsed = daysElapsedIn(monthKey, now: now);
 
-      return rows
-          .map((row) => BudgetProgress(
-                budgetId: row.read<int>('budget_id'),
-                categoryId: row.read<int>('category_id'),
-                categoryName: row.read<String>('category_name'),
-                colorValue: row.read<int?>('category_color'),
-                iconKey: row.read<String?>('category_icon'),
-                limitAmount: row.read<int>('limit_amount'),
-                spent: row.read<int>('spent'),
-                isRecurring: row.read<int?>('budget_month') == null,
-                monthKey: monthKey,
-                daysInMonth: totalDays,
-                daysElapsed: elapsed,
-              ))
-          .toList();
-    });
+          return rows
+              .map(
+                (row) => BudgetProgress(
+                  budgetId: row.read<int>('budget_id'),
+                  categoryId: row.read<int>('category_id'),
+                  categoryName: row.read<String>('category_name'),
+                  colorValue: row.read<int?>('category_color'),
+                  iconKey: row.read<String?>('category_icon'),
+                  limitAmount: row.read<int>('limit_amount'),
+                  spent: row.read<int>('spent'),
+                  isRecurring: row.read<int?>('budget_month') == null,
+                  monthKey: monthKey,
+                  daysInMonth: totalDays,
+                  daysElapsed: elapsed,
+                ),
+              )
+              .toList();
+        });
   }
 
   /// Tổng chi tiêu trong một ngày, gom theo danh mục có đặt hạn mức.
@@ -1069,6 +1081,38 @@ class Repository {
     ).watch().map((rows) => {
           for (final row in rows) row.read<int>('cid'): row.read<int>('total'),
         });
+  }
+
+  /// Tiền đã ra khỏi ví trong một ngày cho những việc NGOÀI các ngân sách:
+  /// chi vào danh mục không đặt hạn mức (kể cả chưa phân loại) và cho mượn —
+  /// gồm cả phần trả dùm.
+  ///
+  /// Khoản chi lấy từ quỹ không tính: tiền đó đã được để dành sẵn, không lấy
+  /// từ tiền tự do.
+  Stream<int> watchSpentOutsideBudgetsOnDay(int dayKey, int monthKey) {
+    return db.customSelect(
+      '''
+      SELECT COALESCE(SUM(t.amount), 0) AS total
+      FROM transactions t
+      WHERE t.deleted_at IS NULL
+        AND t.day_key = ?
+        AND t.fund_id IS NULL
+        AND t.wallet_from_id IS NOT NULL
+        AND (
+          t.kind = 'lend'
+          OR (t.kind = 'expense' AND (
+            t.category_id IS NULL OR t.category_id NOT IN (
+              SELECT b.category_id FROM budgets b
+              JOIN categories c ON c.id = b.category_id
+              WHERE (b.month_key IS NULL OR b.month_key = ?)
+                AND c.is_archived = 0
+            )
+          ))
+        )
+      ''',
+      variables: [Variable.withInt(dayKey), Variable.withInt(monthKey)],
+      readsFrom: {db.transactions, db.budgets, db.categories},
+    ).watchSingle().map((row) => row.read<int>('total'));
   }
 
   /// Đặt hoặc cập nhật hạn mức cho một danh mục.
@@ -1158,6 +1202,7 @@ class BudgetProgress {
     required this.daysElapsed,
     this.colorValue,
     this.iconKey,
+    this.cashCap,
   });
 
   final int budgetId;
@@ -1178,7 +1223,39 @@ class BudgetProgress {
   final int? colorValue;
   final String? iconKey;
 
+  /// Phần tiền THẬT trong ví dành được cho hạn mức này, null nếu không giới
+  /// hạn. Xem [capBudgetsByCash].
+  final int? cashCap;
+
+  BudgetProgress withCashCap(int? cap) => BudgetProgress(
+    budgetId: budgetId,
+    categoryId: categoryId,
+    categoryName: categoryName,
+    limitAmount: limitAmount,
+    spent: spent,
+    isRecurring: isRecurring,
+    monthKey: monthKey,
+    daysInMonth: daysInMonth,
+    daysElapsed: daysElapsed,
+    colorValue: colorValue,
+    iconKey: iconKey,
+    cashCap: cap,
+  );
+
   int get remaining => limitAmount - spent;
+
+  /// Số thực sự còn tiêu được: phần còn lại của hạn mức, nhưng không quá số
+  /// tiền đang có. Hạn mức chỉ là lời hứa với bản thân, còn tiền hết là hết —
+  /// tiêu lố ở danh mục khác thì ví vơi đi dù hạn mức này chưa hề đụng tới.
+  int get spendable {
+    final cap = cashCap;
+    if (cap == null || cap >= remaining) return remaining;
+    return cap < 0 ? 0 : cap;
+  }
+
+  /// Tiền trong ví đã ít hơn phần còn lại của hạn mức.
+  bool get isLimitedByCash =>
+      cashCap != null && remaining > 0 && cashCap! < remaining;
   double get ratio => limitAmount == 0 ? 0 : spent / limitAmount;
   bool get isOver => spent > limitAmount;
 
@@ -1220,7 +1297,7 @@ class BudgetProgress {
   int budgetForToday(int spentToday) {
     final daysLeftIncludingToday = daysRemaining + 1;
     if (daysLeftIncludingToday <= 0) return 0;
-    final pot = remaining + spentToday;
+    final pot = spendable + spentToday;
     if (pot <= 0) return 0;
     return pot ~/ daysLeftIncludingToday;
   }
@@ -1248,8 +1325,21 @@ class BudgetProgress {
   /// xuống bao nhiêu để cả tháng vẫn nằm trong hạn mức.
   int get remainingDailyAllowance {
     if (daysRemaining <= 0) return 0;
-    if (remaining <= 0) return 0;
-    return remaining ~/ daysRemaining;
+    if (spendable <= 0) return 0;
+    return spendable ~/ daysRemaining;
+  }
+
+  /// Những ngày TRƯỚC hôm nay đã tiêu vượt nhịp đều bao nhiêu. Âm là đang dư.
+  ///
+  /// Không phụ thuộc vào lúc nào khoản chi được ghi: quên ghi hôm qua, sáng nay
+  /// ghi bù với ngày của hôm qua thì con số này vẫn lộ ra. Nhờ vậy màn hình giải
+  /// thích được vì sao mốc hôm nay thấp hơn bình thường, thay vì lặng lẽ hạ mốc
+  /// mà không ai hay.
+  int overspentBeforeToday(int spentToday) {
+    if (daysInMonth == 0 || daysElapsed == 0) return 0;
+    final before = spent - spentToday;
+    final expected = (limitAmount * (daysElapsed - 1)) ~/ daysInMonth;
+    return before - expected;
   }
 
   /// Cứ giữ nhịp này thì hết tháng sẽ tiêu hết bao nhiêu.
@@ -1259,8 +1349,8 @@ class BudgetProgress {
   /// Cứ giữ nhịp này thì còn cầm cự được thêm bao nhiêu ngày nữa.
   /// Trả về null nếu đủ tiền tới hết tháng.
   int? get daysUntilRunOut {
-    if (dailyAverage <= 0 || remaining <= 0) return null;
-    final days = remaining ~/ dailyAverage;
+    if (dailyAverage <= 0 || spendable <= 0) return null;
+    final days = spendable ~/ dailyAverage;
     if (days >= daysRemaining) return null;
     return days;
   }
@@ -1294,8 +1384,30 @@ class BudgetProgress {
   /// những tháng đã kết thúc vì không còn gì để điều chỉnh.
   bool get needsAttention {
     if (isPastMonth) return false;
-    return isOver || isNearLimit || pace == BudgetPace.fast;
+    return isOver || isNearLimit || pace == BudgetPace.fast || isLimitedByCash;
   }
+}
+
+/// Chặn các hạn mức bằng số tiền thật đang có.
+///
+/// Hạn mức ăn uống còn 300k nhưng ví chỉ còn 190k — vì tiền đã chảy sang những
+/// khoản khác — thì con số "mỗi ngày được tiêu" phải tính trên 190k. Có nhiều
+/// hạn mức thì chia tiền theo tỉ lệ phần còn lại của từng cái, để tổng các
+/// phần không vượt quá số tiền đang có. Đủ tiền cho tất cả thì giữ nguyên.
+List<BudgetProgress> capBudgetsByCash(List<BudgetProgress> budgets, int cash) {
+  final open = budgets.fold<int>(
+    0,
+    (sum, b) => sum + (b.remaining > 0 ? b.remaining : 0),
+  );
+  if (open <= cash) return budgets;
+
+  final available = cash < 0 ? 0 : cash;
+  return [
+    for (final b in budgets)
+      b.withCashCap(
+        b.remaining <= 0 ? 0 : (available * (b.remaining / open)).floor(),
+      ),
+  ];
 }
 
 /// Tổng tiền của một danh mục trong một tháng.

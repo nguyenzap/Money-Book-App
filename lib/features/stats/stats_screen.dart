@@ -10,6 +10,7 @@ import '../../core/theme.dart';
 import '../budgets/budget_screen.dart';
 import '../transactions/tx_editor_screen.dart';
 import '../transactions/tx_tile.dart';
+import 'category_detail_screen.dart';
 
 final _categoryTotalsProvider =
     StreamProvider.family<List<CategoryTotal>, int>((ref, monthKey) {
@@ -293,8 +294,7 @@ class _BudgetAlertRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final style = paceStyle(context, progress.pace);
-    final canStillSpend =
-        progress.daysRemaining > 0 && progress.remaining > 0;
+    final canStillSpend = progress.daysRemaining > 0 && progress.spendable > 0;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
@@ -327,26 +327,28 @@ class _BudgetAlertRow extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 8),
-          PaceMarkerBar(
-            progress: progress,
-            color: style.color,
-            height: 6,
-          ),
+          PaceMarkerBar(progress: progress, color: style.color, height: 6),
           const SizedBox(height: 8),
           Align(
             alignment: Alignment.centerLeft,
             child: Text(
               canStillSpend
                   ? 'Còn ${progress.daysRemaining} ngày · tiêu dưới '
-                      '${formatVndShort(progress.remainingDailyAllowance)}/ngày '
-                      'thì vừa đủ'
+                        '${formatVndShort(progress.remainingDailyAllowance)}/ngày '
+                        'thì vừa đủ'
                   : progress.isOver
-                      ? 'Hạn mức tháng này đã dùng hết'
-                      : 'Hết tháng, còn dư '
-                          '${formatVndShort(progress.remaining)}',
+                  ? 'Hạn mức tháng này đã dùng hết'
+                  : progress.daysRemaining > 0
+                  ? 'Ví đã hết tiền tiêu được'
+                  : 'Hết tháng, còn dư '
+                        '${formatVndShort(progress.remaining)}',
               style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
             ),
           ),
+          if (progress.isLimitedByCash) ...[
+            const SizedBox(height: 6),
+            CashLimitNote(progress: progress),
+          ],
         ],
       ),
     );
@@ -405,8 +407,9 @@ class _CategoryBreakdown extends ConsumerWidget {
             final max = list.first.total;
 
             return Card(
+              clipBehavior: Clip.antiAlias,
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                padding: const EdgeInsets.symmetric(vertical: 8),
                 child: Column(
                   children: [
                     for (final item in list)
@@ -414,6 +417,18 @@ class _CategoryBreakdown extends ConsumerWidget {
                         item: item,
                         maxValue: max,
                         grandTotal: grand,
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => CategoryDetailScreen(
+                              categoryId: item.categoryId,
+                              name: item.name,
+                              monthKey: monthKey,
+                              iconKey: item.iconKey,
+                              colorValue: item.colorValue,
+                            ),
+                          ),
+                        ),
                       ),
                   ],
                 ),
@@ -431,11 +446,13 @@ class _CategoryBar extends StatelessWidget {
     required this.item,
     required this.maxValue,
     required this.grandTotal,
+    required this.onTap,
   });
 
   final CategoryTotal item;
   final int maxValue;
   final int grandTotal;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -451,60 +468,66 @@ class _CategoryBar extends StatelessWidget {
       ratio,
     )!;
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(
-                iconFor(item.iconKey, fallback: Icons.label_outline),
-                size: 16,
-                color: item.colorValue == null
-                    ? scheme.onSurfaceVariant
-                    : Color(item.colorValue!),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  item.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 13.5,
-                    fontWeight: FontWeight.w500,
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 7, 16, 7),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  iconFor(item.iconKey, fallback: Icons.label_outline),
+                  size: 16,
+                  color: item.colorValue == null
+                      ? scheme.onSurfaceVariant
+                      : Color(item.colorValue!),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    item.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                '${share.toStringAsFixed(0)}%',
-                style: TextStyle(fontSize: 12, color: scheme.outline),
-              ),
-              const SizedBox(width: 10),
-              Text(
-                formatVnd(item.total),
-                style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  fontFeatures: [FontFeature.tabularFigures()],
+                const SizedBox(width: 8),
+                Text(
+                  '${share.toStringAsFixed(0)}%',
+                  style: TextStyle(fontSize: 12, color: scheme.outline),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: LinearProgressIndicator(
-              value: ratio,
-              minHeight: 8,
-              backgroundColor:
-                  scheme.surfaceContainerHighest.withValues(alpha: 0.7),
-              valueColor: AlwaysStoppedAnimation(barColor),
+                const SizedBox(width: 10),
+                Text(
+                  formatVnd(item.total),
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    fontFeatures: [FontFeature.tabularFigures()],
+                  ),
+                ),
+                const SizedBox(width: 2),
+                Icon(Icons.chevron_right, size: 18, color: scheme.outline),
+              ],
             ),
-          ),
-        ],
+            const SizedBox(height: 6),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: ratio,
+                minHeight: 8,
+                backgroundColor: scheme.surfaceContainerHighest.withValues(
+                  alpha: 0.7,
+                ),
+                valueColor: AlwaysStoppedAnimation(barColor),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
