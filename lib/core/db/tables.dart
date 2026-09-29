@@ -87,6 +87,32 @@ class RecurringTemplates extends Table {
   IntColumn get updatedAt => integer()();
 }
 
+/// Mẫu chi tiêu: khoản chi hay lặp lại (cà phê, gửi xe, ăn trưa...) để ghi
+/// bằng một chạm.
+///
+/// Khác [RecurringTemplates] ở chỗ không có lịch: mẫu chỉ chạy khi người dùng
+/// bấm, và thời điểm luôn là lúc bấm. Mọi trường đều có thể để trống — thiếu
+/// trường nào thì bấm vào mẫu sẽ mở màn ghi đã điền sẵn phần còn lại, để khoản
+/// như đổ xăng (ví, danh mục cố định nhưng số tiền mỗi lần một khác) vẫn đỡ
+/// được mấy bước chọn.
+class ExpenseTemplates extends Table {
+  IntColumn get id => integer().autoIncrement()();
+
+  /// Cũng là nhãn của mẫu. Để trống thì mẫu mang tên danh mục.
+  TextColumn get note => text().nullable()();
+
+  /// Số đồng, luôn dương. Null nghĩa là mỗi lần một khác, hỏi lúc ghi.
+  IntColumn get amount => integer().nullable()();
+
+  IntColumn get walletId => integer().nullable().references(Wallets, #id)();
+  IntColumn get categoryId =>
+      integer().nullable().references(Categories, #id)();
+
+  IntColumn get sortOrder => integer().withDefault(const Constant(0))();
+  IntColumn get createdAt => integer()();
+  IntColumn get updatedAt => integer()();
+}
+
 /// Bảng trung tâm của toàn bộ app.
 ///
 /// Mọi loại giao dịch đều nằm ở đây, phân biệt bằng [kind]. Mỗi dòng có tối đa

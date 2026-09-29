@@ -184,6 +184,11 @@ final fundsProvider = StreamProvider<List<FundProgress>>((ref) {
   return ref.watch(repositoryProvider).watchFunds();
 });
 
+/// Mẫu chi tiêu để ghi một chạm.
+final templatesProvider = StreamProvider<List<TemplateView>>((ref) {
+  return ref.watch(repositoryProvider).watchTemplates();
+});
+
 /// Người dùng có đang cho hiện tiền quỹ trong tổng tài sản không.
 ///
 /// Mặc định là không: tiền quỹ đã có chỗ đến rồi, gộp vào tổng dễ làm mình

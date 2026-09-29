@@ -151,7 +151,7 @@ void main() {
     return db;
   }
 
-  group('nâng cấp từ v1 lên v2', () {
+  group('nâng cấp từ v1 lên bản mới nhất', () {
     late AppDatabase db;
     late Repository repo;
 
@@ -166,7 +166,21 @@ void main() {
 
     test('migration chạy được và lên đúng phiên bản', () async {
       final row = await db.customSelect('PRAGMA user_version').getSingle();
-      expect(row.data.values.first, 2);
+      expect(row.data.values.first, 3);
+    });
+
+    test('bảng mẫu chi tiêu đã có và dùng được ngay', () async {
+      expect(await repo.watchTemplates().first, isEmpty);
+      final id = await repo.insertTemplate(
+        note: 'Cà phê',
+        amount: 25000,
+        walletId: 1,
+        categoryId: 1,
+      );
+      expect(
+        await repo.recordFromTemplate(id, occurredAt: DateTime(2026, 9, 12)),
+        isNotNull,
+      );
     });
 
     test('dữ liệu cũ còn nguyên vẹn', () async {
@@ -223,7 +237,7 @@ void main() {
     });
 
     test('chạy lại migration lần nữa không hỏng gì', () async {
-      // Mở lại chính database đó một lần nữa: user_version đã là 2 nên
+      // Mở lại chính database đó một lần nữa: user_version đã là mới nhất nên
       // onUpgrade không chạy, không được đẻ ra lỗi bảng đã tồn tại.
       final wallets = await repo.watchWalletsWithBalance().first;
       expect(wallets, hasLength(2));
@@ -240,8 +254,9 @@ void main() {
       await db.customStatement('SELECT 1');
 
       final row = await db.customSelect('PRAGMA user_version').getSingle();
-      expect(row.data.values.first, 2);
+      expect(row.data.values.first, 3);
       expect(await repo.watchFunds().first, isEmpty);
+      expect(await repo.watchTemplates().first, isEmpty);
       expect(await repo.watchTotalInFunds().first, 0);
     });
   });

@@ -10,6 +10,7 @@ import '../../core/providers.dart';
 import '../../core/theme.dart';
 import '../../core/widgets.dart';
 import '../settings/settings_screen.dart';
+import '../templates/template_screen.dart';
 import 'budget_today_section.dart';
 import 'free_money_section.dart';
 import '../transactions/tx_editor_screen.dart';
@@ -46,6 +47,8 @@ class DashboardScreen extends ConsumerWidget {
           // Ngay dưới số tiền đang có là câu hỏi quan trọng hơn: trong đó bao
           // nhiêu được tiêu thoải mái mà không đụng tới tiền ăn.
           FreeMoneySection(),
+          // Không có mẫu thì cụm này tự ẩn, kể cả khoảng cách.
+          _TemplatesSection(),
           SizedBox(height: 20),
           // Ngân sách nằm ngay dưới tổng tài sản: đây là con số quyết định
           // bữa trưa hôm nay, không phải thứ phải đi tìm trong Cài đặt.
@@ -149,6 +152,40 @@ class _TotalAssetsCard extends ConsumerWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Nút ghi nhanh theo mẫu: bấm là ghi, giữ để sửa mẫu.
+class _TemplatesSection extends ConsumerWidget {
+  const _TemplatesSection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final templates = ref.watch(templatesProvider).valueOrNull ?? const [];
+    if (templates.isEmpty) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _SectionHeader(
+            title: 'Ghi nhanh',
+            actionLabel: 'Quản lý',
+            onAction: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const TemplateScreen()),
+            ),
+          ),
+          const SizedBox(height: 4),
+          TemplateChips(
+            templates: templates,
+            onTap: (t) => useTemplate(context, ref, t),
+            onLongPress: (t) => showTemplateEditor(context, editing: t),
+          ),
+        ],
       ),
     );
   }
@@ -435,12 +472,15 @@ class _SectionHeader extends StatelessWidget {
   }
 }
 
-/// Bốn nút ghi nhanh, hiện trong bottom sheet khi bấm nút cộng.
-class QuickActionSheet extends StatelessWidget {
+/// Bốn nút ghi nhanh, hiện trong bottom sheet khi bấm nút cộng. Có mẫu chi
+/// tiêu thì các mẫu đứng trên cùng.
+class QuickActionSheet extends ConsumerWidget {
   const QuickActionSheet({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final templates = ref.watch(templatesProvider).valueOrNull ?? const [];
+
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
@@ -456,6 +496,23 @@ class QuickActionSheet extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 18),
+            if (templates.isNotEmpty) ...[
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TemplateChips(
+                  templates: templates,
+                  onTap: (t) {
+                    // Sheet đóng ngay nên phải mượn context của Navigator để
+                    // còn hiện thông báo hoàn tác và mở màn ghi.
+                    final host = Navigator.of(context).context;
+                    Navigator.pop(context);
+                    useTemplate(host, ref, t);
+                  },
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Divider(),
+            ],
             for (final kind in [
               TxKind.expense,
               TxKind.income,

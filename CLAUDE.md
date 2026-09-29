@@ -7,7 +7,7 @@ trong máy, không server, không tài khoản.
 
 ```powershell
 flutter run -d <device>                 # dev, hot reload bằng phím r
-flutter test                            # 243 test, chạy trong ~2 giây
+flutter test                            # 255 test, chạy trong ~2 giây
 flutter analyze
 dart run build_runner build             # BẮT BUỘC sau khi sửa lib/core/db/tables.dart
 flutter build apk --release --target-platform android-arm64
@@ -153,6 +153,21 @@ theo "chân ví nào khác null" — nạp quỹ có cả hai chân nên cách s
 triệt tiêu và quỹ luôn bằng 0. Dùng chung biểu thức `Repository._fundSavedExpr`.
 
 Tiền quỹ trừ khỏi `watchSpendableAssets` nhưng vẫn trong `watchTotalAssets`.
+
+## Mẫu chi tiêu
+
+Bảng `expense_templates`, tách khỏi `recurring_templates` vì mẫu không có lịch:
+chỉ chạy khi bấm, thời điểm luôn là lúc bấm. Cố định được ghi chú (cũng là
+nhãn; trống thì lấy tên danh mục), số tiền, ví và danh mục — trường nào cũng
+để trống được. Đủ cả bốn (`TemplateView.isOneTap`) thì bấm là ghi luôn kèm
+Hoàn tác; thiếu thì mở màn ghi điền sẵn phần đã có. Ví đã lưu trữ coi như
+thiếu ví.
+
+`Repository.recordFromTemplate` đọc lại mẫu từ DB chứ không tin bản trên màn
+hình. Xoá ví / danh mục thì mẫu chỉ mất trường đó (`deleteWallet`,
+`deleteCategory` gỡ trước, nếu không khoá ngoại chặn). Nút ghi nhanh ở màn
+Tổng quan (giữ để sửa) và đầu bảng nút cộng; màn ghi chi tiêu có nút "Lưu làm
+mẫu".
 
 ## Sao lưu
 

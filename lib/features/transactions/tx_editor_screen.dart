@@ -20,6 +20,7 @@ Future<void> openTxEditor(
   TxView? editing,
   int? presetWalletId,
   int? presetPersonId,
+  TemplateView? fromTemplate,
 }) {
   return Navigator.push<void>(
     context,
@@ -29,6 +30,7 @@ Future<void> openTxEditor(
         editing: editing,
         presetWalletId: presetWalletId,
         presetPersonId: presetPersonId,
+        fromTemplate: fromTemplate,
       ),
     ),
   );
@@ -46,12 +48,17 @@ class TxEditorScreen extends ConsumerStatefulWidget {
     this.editing,
     this.presetWalletId,
     this.presetPersonId,
+    this.fromTemplate,
   });
 
   final TxKind initialKind;
   final TxView? editing;
   final int? presetWalletId;
   final int? presetPersonId;
+
+  /// Mẫu chưa đủ trường để ghi một chạm: điền sẵn phần đã có, người dùng chỉ
+  /// việc điền nốt.
+  final TemplateView? fromTemplate;
 
   @override
   ConsumerState<TxEditorScreen> createState() => _TxEditorScreenState();
@@ -94,12 +101,48 @@ class _TxEditorScreenState extends ConsumerState<TxEditorScreen> {
       _fundId = editing.tx.fundId;
       _occurredAt =
           DateTime.fromMillisecondsSinceEpoch(editing.tx.occurredAt);
+    } else if (widget.fromTemplate != null) {
+      final t = widget.fromTemplate!;
+      _kind = TxKind.expense;
+      _occurredAt = DateTime.now();
+      if (t.hasAmount) _amountController.text = groupDigits(t.amount!);
+      _noteController.text = t.template.note ?? '';
+      if (t.hasWallet) _walletFromId = t.template.walletId;
+      if (t.hasCategory) _categoryId = t.template.categoryId;
     } else {
       _kind = widget.initialKind;
       _occurredAt = DateTime.now();
       _personId = widget.presetPersonId;
       _applyPresetWallet();
     }
+  }
+
+  /// Có lưu được các trường đang nhập thành mẫu chi tiêu không.
+  bool get _canSaveAsTemplate =>
+      !_isEditing && _kind == TxKind.expense && !_split.enabled;
+
+  /// Lưu các trường đang nhập thành một mẫu, để lần sau ghi một chạm. Không
+  /// đóng màn hình — người dùng vẫn ghi khoản này như thường.
+  Future<void> _saveAsTemplate() async {
+    final note = _noteController.text.trim();
+    if (note.isEmpty && _categoryId == null) {
+      showSnack(context, 'Nhập ghi chú hoặc chọn danh mục để đặt tên cho mẫu');
+      return;
+    }
+    final amount = parseVnd(_amountController.text);
+    await ref.read(repositoryProvider).insertTemplate(
+          note: note.isEmpty ? null : note,
+          amount: amount > 0 ? amount : null,
+          walletId: _walletFromId,
+          categoryId: _categoryId,
+        );
+    if (!mounted) return;
+    showSnack(
+      context,
+      amount > 0 && _walletFromId != null && _categoryId != null
+          ? 'Đã lưu mẫu. Lần sau bấm ở màn Tổng quan là ghi xong'
+          : 'Đã lưu mẫu. Các trường để trống sẽ được hỏi khi dùng',
+    );
   }
 
   void _applyPresetWallet() {
@@ -306,6 +349,12 @@ class _TxEditorScreenState extends ConsumerState<TxEditorScreen> {
       appBar: AppBar(
         title: Text(_isEditing ? 'Sửa giao dịch' : 'Ghi giao dịch'),
         actions: [
+          if (_canSaveAsTemplate)
+            IconButton(
+              icon: const Icon(Icons.bookmark_add_outlined),
+              tooltip: 'Lưu làm mẫu',
+              onPressed: _saveAsTemplate,
+            ),
           if (_isEditing)
             IconButton(
               icon: const Icon(Icons.delete_outline),

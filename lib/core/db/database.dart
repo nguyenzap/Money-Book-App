@@ -21,6 +21,7 @@ part 'database.g.dart';
     RecurringTemplates,
     Budgets,
     Funds,
+    ExpenseTemplates,
     SettingsKv,
   ],
 )
@@ -31,7 +32,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.e);
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -57,6 +58,10 @@ class AppDatabase extends _$AppDatabase {
             await customStatement(
               'CREATE INDEX IF NOT EXISTS ix_funds_wallet ON funds(wallet_id)',
             );
+          }
+          // v3: mẫu chi tiêu để ghi một chạm.
+          if (from < 3) {
+            await m.createTable(expenseTemplates);
           }
         },
         beforeOpen: (details) async {

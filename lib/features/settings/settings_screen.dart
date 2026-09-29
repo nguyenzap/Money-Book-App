@@ -6,6 +6,7 @@ import '../budgets/budget_screen.dart';
 import '../funds/fund_screen.dart';
 import '../categories/category_list_screen.dart';
 import '../people/person_list_screen.dart';
+import '../templates/template_screen.dart';
 import '../wallets/wallet_list_screen.dart';
 
 class SettingsScreen extends ConsumerWidget {
@@ -46,6 +47,16 @@ class SettingsScreen extends ConsumerWidget {
             onTap: () => Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => const PersonListScreen()),
+            ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.bolt_outlined),
+            title: const Text('Mẫu chi tiêu'),
+            subtitle: const Text('Khoản chi hay lặp lại, ghi một chạm'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const TemplateScreen()),
             ),
           ),
           ListTile(

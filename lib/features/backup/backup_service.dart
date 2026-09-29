@@ -14,7 +14,7 @@ import '../../core/format/dates.dart';
 ///
 /// Tăng lên mỗi khi cấu trúc file đổi, để bản app cũ biết mà từ chối file mới
 /// thay vì đọc bừa rồi hỏng dữ liệu.
-const kBackupFormatVersion = 2;
+const kBackupFormatVersion = 3;
 
 class BackupStats {
   const BackupStats({
@@ -24,6 +24,7 @@ class BackupStats {
     required this.transactions,
     required this.budgets,
     required this.funds,
+    this.templates = 0,
   });
 
   final int wallets;
@@ -32,8 +33,16 @@ class BackupStats {
   final int transactions;
   final int budgets;
   final int funds;
+  final int templates;
 
-  int get total => wallets + categories + people + transactions + budgets + funds;
+  int get total =>
+      wallets +
+      categories +
+      people +
+      transactions +
+      budgets +
+      funds +
+      templates;
 }
 
 /// Cách xử lý khi nhập một file sao lưu.
@@ -70,6 +79,7 @@ class BackupService {
     final transactions = await db.select(db.transactions).get();
     final budgets = await db.select(db.budgets).get();
     final funds = await db.select(db.funds).get();
+    final templates = await db.select(db.expenseTemplates).get();
 
     final data = <String, dynamic>{
       'formatVersion': kBackupFormatVersion,
@@ -82,6 +92,7 @@ class BackupService {
       'transactions': transactions.map(_transactionToMap).toList(),
       'budgets': budgets.map(_budgetToMap).toList(),
       'funds': funds.map(_fundToMap).toList(),
+      'templates': templates.map(_templateToMap).toList(),
     };
 
     return const JsonEncoder.withIndent('  ').convert(data);
@@ -91,7 +102,8 @@ class BackupService {
   Future<File> writeJsonFile() async {
     final dir = await getTemporaryDirectory();
     final now = DateTime.now();
-    final name = 'moneybook_${dayKeyOf(now)}_'
+    final name =
+        'moneybook_${dayKeyOf(now)}_'
         '${now.hour.toString().padLeft(2, '0')}'
         '${now.minute.toString().padLeft(2, '0')}.json';
     final file = File(p.join(dir.path, name));
@@ -173,6 +185,7 @@ class BackupService {
       transactions: (data['transactions'] as List).length,
       budgets: (data['budgets'] as List?)?.length ?? 0,
       funds: (data['funds'] as List?)?.length ?? 0,
+      templates: (data['templates'] as List?)?.length ?? 0,
     );
   }
 
@@ -190,14 +203,16 @@ class BackupService {
     final data = _decodeAndValidate(jsonString);
 
     final walletRows = (data['wallets'] as List).cast<Map<String, dynamic>>();
-    final categoryRows =
-        (data['categories'] as List).cast<Map<String, dynamic>>();
+    final categoryRows = (data['categories'] as List)
+        .cast<Map<String, dynamic>>();
     final peopleRows = (data['people'] as List).cast<Map<String, dynamic>>();
     final txRows = (data['transactions'] as List).cast<Map<String, dynamic>>();
-    final budgetRows =
-        ((data['budgets'] as List?) ?? const []).cast<Map<String, dynamic>>();
-    final fundRows =
-        ((data['funds'] as List?) ?? const []).cast<Map<String, dynamic>>();
+    final budgetRows = ((data['budgets'] as List?) ?? const [])
+        .cast<Map<String, dynamic>>();
+    final fundRows = ((data['funds'] as List?) ?? const [])
+        .cast<Map<String, dynamic>>();
+    final templateRows = ((data['templates'] as List?) ?? const [])
+        .cast<Map<String, dynamic>>();
 
     await db.transaction(() async {
       if (mode == ImportMode.replace) {
@@ -205,6 +220,7 @@ class BackupService {
         await db.delete(db.transactions).go();
         await db.delete(db.budgets).go();
         await db.delete(db.funds).go();
+        await db.delete(db.expenseTemplates).go();
         await db.delete(db.wallets).go();
         await db.delete(db.categories).go();
         await db.delete(db.people).go();
@@ -212,7 +228,9 @@ class BackupService {
 
       final walletIds = <int, int>{};
       for (final row in walletRows) {
-        walletIds[row['id'] as int] = await db.into(db.wallets).insert(
+        walletIds[row['id'] as int] = await db
+            .into(db.wallets)
+            .insert(
               WalletsCompanion.insert(
                 name: row['name'] as String,
                 type: Value(row['type'] as String? ?? 'other'),
@@ -230,7 +248,9 @@ class BackupService {
 
       final categoryIds = <int, int>{};
       for (final row in categoryRows) {
-        categoryIds[row['id'] as int] = await db.into(db.categories).insert(
+        categoryIds[row['id'] as int] = await db
+            .into(db.categories)
+            .insert(
               CategoriesCompanion.insert(
                 name: row['name'] as String,
                 flow: row['flow'] as String,
@@ -246,7 +266,9 @@ class BackupService {
 
       final personIds = <int, int>{};
       for (final row in peopleRows) {
-        personIds[row['id'] as int] = await db.into(db.people).insert(
+        personIds[row['id'] as int] = await db
+            .into(db.people)
+            .insert(
               PeopleCompanion.insert(
                 name: row['name'] as String,
                 phone: Value(row['phone'] as String?),
@@ -264,7 +286,9 @@ class BackupService {
       for (final row in fundRows) {
         final walletId = walletIds[row['walletId']];
         if (walletId == null) continue;
-        fundIds[row['id'] as int] = await db.into(db.funds).insert(
+        fundIds[row['id'] as int] = await db
+            .into(db.funds)
+            .insert(
               FundsCompanion.insert(
                 name: row['name'] as String,
                 walletId: walletId,
@@ -287,7 +311,9 @@ class BackupService {
         final occurredAt = row['occurredAt'] as int;
         final local = DateTime.fromMillisecondsSinceEpoch(occurredAt);
 
-        await db.into(db.transactions).insert(
+        await db
+            .into(db.transactions)
+            .insert(
               TransactionsCompanion.insert(
                 kind: kind,
                 amount: amount,
@@ -316,11 +342,32 @@ class BackupService {
       for (final row in budgetRows) {
         final categoryId = categoryIds[row['categoryId']];
         if (categoryId == null) continue;
-        await db.into(db.budgets).insert(
+        await db
+            .into(db.budgets)
+            .insert(
               BudgetsCompanion.insert(
                 categoryId: categoryId,
                 monthKey: Value(row['monthKey'] as int?),
                 limitAmount: row['limitAmount'] as int,
+                createdAt: row['createdAt'] as int? ?? 0,
+                updatedAt: row['updatedAt'] as int? ?? 0,
+              ),
+            );
+      }
+
+      for (final row in templateRows) {
+        final amount = row['amount'] as int?;
+        await db
+            .into(db.expenseTemplates)
+            .insert(
+              ExpenseTemplatesCompanion.insert(
+                note: Value(row['note'] as String?),
+                // Không tin số âm hay bằng 0 trong file: mẫu chỉ có số dương
+                // hoặc để trống.
+                amount: Value(amount != null && amount > 0 ? amount : null),
+                walletId: Value(walletIds[row['walletId']]),
+                categoryId: Value(categoryIds[row['categoryId']]),
+                sortOrder: Value(row['sortOrder'] as int? ?? 0),
                 createdAt: row['createdAt'] as int? ?? 0,
                 updatedAt: row['updatedAt'] as int? ?? 0,
               ),
@@ -337,6 +384,7 @@ class BackupService {
         transactions: txRows.length,
         budgets: budgetRows.length,
         funds: fundRows.length,
+        templates: templateRows.length,
       ),
     );
   }
@@ -381,87 +429,98 @@ class BackupService {
   }
 
   Map<String, dynamic> _walletToMap(Wallet w) => {
-        'id': w.id,
-        'name': w.name,
-        'type': w.type,
-        'initialBalance': w.initialBalance,
-        'iconKey': w.iconKey,
-        'colorValue': w.colorValue,
-        'note': w.note,
-        'isArchived': w.isArchived,
-        'sortOrder': w.sortOrder,
-        'createdAt': w.createdAt,
-        'updatedAt': w.updatedAt,
-      };
+    'id': w.id,
+    'name': w.name,
+    'type': w.type,
+    'initialBalance': w.initialBalance,
+    'iconKey': w.iconKey,
+    'colorValue': w.colorValue,
+    'note': w.note,
+    'isArchived': w.isArchived,
+    'sortOrder': w.sortOrder,
+    'createdAt': w.createdAt,
+    'updatedAt': w.updatedAt,
+  };
 
   Map<String, dynamic> _categoryToMap(Category c) => {
-        'id': c.id,
-        'name': c.name,
-        'flow': c.flow,
-        'iconKey': c.iconKey,
-        'colorValue': c.colorValue,
-        'isArchived': c.isArchived,
-        'sortOrder': c.sortOrder,
-        'createdAt': c.createdAt,
-        'updatedAt': c.updatedAt,
-      };
+    'id': c.id,
+    'name': c.name,
+    'flow': c.flow,
+    'iconKey': c.iconKey,
+    'colorValue': c.colorValue,
+    'isArchived': c.isArchived,
+    'sortOrder': c.sortOrder,
+    'createdAt': c.createdAt,
+    'updatedAt': c.updatedAt,
+  };
 
   Map<String, dynamic> _personToMap(Person p) => {
-        'id': p.id,
-        'name': p.name,
-        'phone': p.phone,
-        'note': p.note,
-        'avatarColor': p.avatarColor,
-        'isArchived': p.isArchived,
-        'sortOrder': p.sortOrder,
-        'createdAt': p.createdAt,
-        'updatedAt': p.updatedAt,
-      };
+    'id': p.id,
+    'name': p.name,
+    'phone': p.phone,
+    'note': p.note,
+    'avatarColor': p.avatarColor,
+    'isArchived': p.isArchived,
+    'sortOrder': p.sortOrder,
+    'createdAt': p.createdAt,
+    'updatedAt': p.updatedAt,
+  };
 
   Map<String, dynamic> _transactionToMap(Transaction t) => {
-        'id': t.id,
-        'kind': t.kind.id,
-        'amount': t.amount,
-        'occurredAt': t.occurredAt,
-        'dayKey': t.dayKey,
-        'monthKey': t.monthKey,
-        'walletFromId': t.walletFromId,
-        'walletToId': t.walletToId,
-        'categoryId': t.categoryId,
-        'personId': t.personId,
-        'fundId': t.fundId,
-        'debtDelta': t.debtDelta,
-        'note': t.note,
-        'groupId': t.groupId,
-        'isWriteoff': t.isWriteoff,
-        'createdAt': t.createdAt,
-        'updatedAt': t.updatedAt,
-        'deletedAt': t.deletedAt,
-      };
+    'id': t.id,
+    'kind': t.kind.id,
+    'amount': t.amount,
+    'occurredAt': t.occurredAt,
+    'dayKey': t.dayKey,
+    'monthKey': t.monthKey,
+    'walletFromId': t.walletFromId,
+    'walletToId': t.walletToId,
+    'categoryId': t.categoryId,
+    'personId': t.personId,
+    'fundId': t.fundId,
+    'debtDelta': t.debtDelta,
+    'note': t.note,
+    'groupId': t.groupId,
+    'isWriteoff': t.isWriteoff,
+    'createdAt': t.createdAt,
+    'updatedAt': t.updatedAt,
+    'deletedAt': t.deletedAt,
+  };
 
   Map<String, dynamic> _fundToMap(Fund f) => {
-        'id': f.id,
-        'name': f.name,
-        'walletId': f.walletId,
-        'targetAmount': f.targetAmount,
-        'dueDayKey': f.dueDayKey,
-        'note': f.note,
-        'iconKey': f.iconKey,
-        'colorValue': f.colorValue,
-        'isArchived': f.isArchived,
-        'sortOrder': f.sortOrder,
-        'createdAt': f.createdAt,
-        'updatedAt': f.updatedAt,
-      };
+    'id': f.id,
+    'name': f.name,
+    'walletId': f.walletId,
+    'targetAmount': f.targetAmount,
+    'dueDayKey': f.dueDayKey,
+    'note': f.note,
+    'iconKey': f.iconKey,
+    'colorValue': f.colorValue,
+    'isArchived': f.isArchived,
+    'sortOrder': f.sortOrder,
+    'createdAt': f.createdAt,
+    'updatedAt': f.updatedAt,
+  };
+
+  Map<String, dynamic> _templateToMap(ExpenseTemplate t) => {
+    'id': t.id,
+    'note': t.note,
+    'amount': t.amount,
+    'walletId': t.walletId,
+    'categoryId': t.categoryId,
+    'sortOrder': t.sortOrder,
+    'createdAt': t.createdAt,
+    'updatedAt': t.updatedAt,
+  };
 
   Map<String, dynamic> _budgetToMap(Budget b) => {
-        'id': b.id,
-        'categoryId': b.categoryId,
-        'monthKey': b.monthKey,
-        'limitAmount': b.limitAmount,
-        'createdAt': b.createdAt,
-        'updatedAt': b.updatedAt,
-      };
+    'id': b.id,
+    'categoryId': b.categoryId,
+    'monthKey': b.monthKey,
+    'limitAmount': b.limitAmount,
+    'createdAt': b.createdAt,
+    'updatedAt': b.updatedAt,
+  };
 }
 
 /// Lỗi có thông điệp đọc được, hiện thẳng cho người dùng.

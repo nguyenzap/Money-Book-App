@@ -122,6 +122,51 @@ class FundProgress {
   }
 }
 
+/// Một mẫu chi tiêu kèm tên ví / danh mục, và mẫu đó có ghi thẳng được không.
+class TemplateView {
+  const TemplateView({
+    required this.template,
+    this.walletName,
+    this.walletArchived = false,
+    this.categoryName,
+    this.categoryIconKey,
+    this.categoryColorValue,
+    this.categoryArchived = false,
+  });
+
+  final ExpenseTemplate template;
+  final String? walletName;
+  final bool walletArchived;
+  final String? categoryName;
+  final String? categoryIconKey;
+  final int? categoryColorValue;
+  final bool categoryArchived;
+
+  int get id => template.id;
+  int? get amount => template.amount;
+
+  /// Nhãn trên nút: ghi chú, không có thì tên danh mục.
+  String get label {
+    final note = template.note?.trim();
+    if (note != null && note.isNotEmpty) return note;
+    return categoryName ?? 'Mẫu chi tiêu';
+  }
+
+  /// Ví còn dùng được. Ví đã lưu trữ thì không ghi thẳng vào nữa — lưu trữ
+  /// nghĩa là không muốn tiêu từ đó.
+  bool get hasWallet =>
+      template.walletId != null && walletName != null && !walletArchived;
+
+  bool get hasCategory =>
+      template.categoryId != null && categoryName != null && !categoryArchived;
+
+  bool get hasAmount => (template.amount ?? 0) > 0;
+
+  /// Đủ cả số tiền, ví và danh mục: bấm là ghi luôn. Thiếu thì mở màn ghi
+  /// điền sẵn phần đã có.
+  bool get isOneTap => hasAmount && hasWallet && hasCategory;
+}
+
 /// Tổng thu / chi của một tháng.
 class MonthTotals {
   const MonthTotals({required this.income, required this.expense});
@@ -152,7 +197,8 @@ class Repository {
   Stream<List<WalletWithBalance>> watchWalletsWithBalance({
     bool includeArchived = false,
   }) {
-    final sql = '''
+    final sql =
+        '''
       SELECT w.*, (
         w.initial_balance
         + COALESCE((SELECT SUM(t.amount) FROM transactions t
@@ -168,12 +214,16 @@ class Repository {
     return db
         .customSelect(sql, readsFrom: {db.wallets, db.transactions})
         .watch()
-        .map((rows) => rows
-            .map((row) => WalletWithBalance(
+        .map(
+          (rows) => rows
+              .map(
+                (row) => WalletWithBalance(
                   db.wallets.map(row.data),
                   row.read<int>('balance'),
-                ))
-            .toList());
+                ),
+              )
+              .toList(),
+        );
   }
 
   Stream<int> watchTotalAssets() {
@@ -194,8 +244,9 @@ class Repository {
   }
 
   Future<int> balanceOf(int walletId) async {
-    final row = await db.customSelect(
-      '''
+    final row = await db
+        .customSelect(
+          '''
       SELECT (
         w.initial_balance
         + COALESCE((SELECT SUM(t.amount) FROM transactions t
@@ -205,9 +256,10 @@ class Repository {
       ) AS balance
       FROM wallets w WHERE w.id = ?
       ''',
-      variables: [Variable.withInt(walletId)],
-      readsFrom: {db.wallets, db.transactions},
-    ).getSingleOrNull();
+          variables: [Variable.withInt(walletId)],
+          readsFrom: {db.wallets, db.transactions},
+        )
+        .getSingleOrNull();
     return row?.read<int>('balance') ?? 0;
   }
 
@@ -216,8 +268,10 @@ class Repository {
     final countExp = t.id.count();
     final q = db.selectOnly(t)
       ..addColumns([countExp])
-      ..where(t.deletedAt.isNull() &
-          (t.walletFromId.equals(walletId) | t.walletToId.equals(walletId)));
+      ..where(
+        t.deletedAt.isNull() &
+            (t.walletFromId.equals(walletId) | t.walletToId.equals(walletId)),
+      );
     return (await q.getSingle()).read(countExp) ?? 0;
   }
 
@@ -227,16 +281,21 @@ class Repository {
 
   Future<void> archiveWallet(int id, {required bool archived}) =>
       (db.update(db.wallets)..where((w) => w.id.equals(id))).write(
-        WalletsCompanion(
-          isArchived: Value(archived),
-          updatedAt: Value(_now()),
-        ),
+        WalletsCompanion(isArchived: Value(archived), updatedAt: Value(_now())),
       );
 
   /// Chỉ nên gọi khi ví không còn giao dịch nào — ví đã dùng thì lưu trữ,
   /// nếu không lịch sử sẽ thủng một lỗ.
-  Future<void> deleteWallet(int id) =>
-      (db.delete(db.wallets)..where((w) => w.id.equals(id))).go();
+  ///
+  /// Mẫu chi tiêu trỏ tới ví này thì chỉ mất ví, lần bấm sau sẽ hỏi lại.
+  Future<void> deleteWallet(int id) async {
+    await db.transaction(() async {
+      await (db.update(db.expenseTemplates)
+            ..where((t) => t.walletId.equals(id)))
+          .write(const ExpenseTemplatesCompanion(walletId: Value(null)));
+      await (db.delete(db.wallets)..where((w) => w.id.equals(id))).go();
+    });
+  }
 
   Future<int> nextWalletSortOrder() async {
     final w = db.wallets;
@@ -261,13 +320,13 @@ class Repository {
                       AND t.wallet_from_id = f.wallet_id), 0)
       )''';
 
-
   /// Tổng tiền đang nằm trong các quỹ chưa lưu trữ.
   ///
   /// Số này bị trừ khỏi "tiền tiêu được" nhưng vẫn nằm trong tổng tài sản đầy
   /// đủ — tiền vẫn là của mình, chỉ là đã có chỗ đến.
   Stream<int> watchTotalInFunds() {
-    const sql = '''
+    const sql =
+        '''
       SELECT COALESCE(SUM(saved), 0) AS total FROM (
         SELECT $_fundSavedExpr AS saved
         FROM funds f WHERE f.is_archived = 0
@@ -289,7 +348,8 @@ class Repository {
 
   /// Danh sách quỹ kèm số đã để dành và ví đang giữ tiền.
   Stream<List<FundProgress>> watchFunds({bool includeArchived = false}) {
-    final sql = '''
+    final sql =
+        '''
       SELECT f.*,
              w.name        AS wallet_name,
              w.icon_key    AS wallet_icon,
@@ -304,26 +364,32 @@ class Repository {
     return db
         .customSelect(sql, readsFrom: {db.funds, db.wallets, db.transactions})
         .watch()
-        .map((rows) => rows
-            .map((row) => FundProgress(
+        .map(
+          (rows) => rows
+              .map(
+                (row) => FundProgress(
                   fund: db.funds.map(row.data),
                   saved: row.read<int>('saved'),
                   walletName: row.read<String>('wallet_name'),
                   walletIconKey: row.read<String?>('wallet_icon'),
                   walletColorValue: row.read<int?>('wallet_color'),
-                ))
-            .toList());
+                ),
+              )
+              .toList(),
+        );
   }
 
   Future<int> savedInFund(int fundId) async {
-    final row = await db.customSelect(
-      '''
+    final row = await db
+        .customSelect(
+          '''
       SELECT $_fundSavedExpr AS saved
       FROM funds f WHERE f.id = ?
       ''',
-      variables: [Variable.withInt(fundId)],
-      readsFrom: {db.funds, db.transactions},
-    ).getSingleOrNull();
+          variables: [Variable.withInt(fundId)],
+          readsFrom: {db.funds, db.transactions},
+        )
+        .getSingleOrNull();
     return row?.read<int>('saved') ?? 0;
   }
 
@@ -333,10 +399,7 @@ class Repository {
 
   Future<void> archiveFund(int id, {required bool archived}) =>
       (db.update(db.funds)..where((f) => f.id.equals(id))).write(
-        FundsCompanion(
-          isArchived: Value(archived),
-          updatedAt: Value(_now()),
-        ),
+        FundsCompanion(isArchived: Value(archived), updatedAt: Value(_now())),
       );
 
   /// Xoá quỹ. Các giao dịch từng gắn quỹ vẫn còn nguyên, chỉ mất nhãn quỹ —
@@ -415,6 +478,139 @@ class Repository {
     );
   }
 
+  // ----- Mẫu chi tiêu ---------------------------------------------------
+
+  static const _templateSql = '''
+      SELECT et.*,
+             w.name        AS w_name,
+             w.is_archived AS w_archived,
+             c.name        AS c_name,
+             c.icon_key    AS c_icon,
+             c.color_value AS c_color,
+             c.is_archived AS c_archived
+      FROM expense_templates et
+      LEFT JOIN wallets    w ON w.id = et.wallet_id
+      LEFT JOIN categories c ON c.id = et.category_id
+  ''';
+
+  TemplateView _rowToTemplateView(QueryRow row) => TemplateView(
+    template: db.expenseTemplates.map(row.data),
+    walletName: row.read<String?>('w_name'),
+    walletArchived: (row.read<int?>('w_archived') ?? 0) != 0,
+    categoryName: row.read<String?>('c_name'),
+    categoryIconKey: row.read<String?>('c_icon'),
+    categoryColorValue: row.read<int?>('c_color'),
+    categoryArchived: (row.read<int?>('c_archived') ?? 0) != 0,
+  );
+
+  Stream<List<TemplateView>> watchTemplates() {
+    return db
+        .customSelect(
+          '$_templateSql ORDER BY et.sort_order, et.id',
+          readsFrom: {db.expenseTemplates, db.wallets, db.categories},
+        )
+        .watch()
+        .map((rows) => rows.map(_rowToTemplateView).toList());
+  }
+
+  Future<TemplateView?> getTemplate(int id) async {
+    final row = await db
+        .customSelect(
+          '$_templateSql WHERE et.id = ?',
+          variables: [Variable.withInt(id)],
+          readsFrom: {db.expenseTemplates, db.wallets, db.categories},
+        )
+        .getSingleOrNull();
+    return row == null ? null : _rowToTemplateView(row);
+  }
+
+  Future<int> insertTemplate({
+    String? note,
+    int? amount,
+    int? walletId,
+    int? categoryId,
+  }) async {
+    assert(amount == null || amount > 0);
+    final now = _now();
+    return db
+        .into(db.expenseTemplates)
+        .insert(
+          ExpenseTemplatesCompanion.insert(
+            note: Value(note),
+            amount: Value(amount),
+            walletId: Value(walletId),
+            categoryId: Value(categoryId),
+            sortOrder: Value(await _nextTemplateSortOrder()),
+            createdAt: now,
+            updatedAt: now,
+          ),
+        );
+  }
+
+  Future<void> updateTemplate({
+    required int id,
+    String? note,
+    int? amount,
+    int? walletId,
+    int? categoryId,
+  }) {
+    assert(amount == null || amount > 0);
+    return (db.update(
+      db.expenseTemplates,
+    )..where((t) => t.id.equals(id))).write(
+      ExpenseTemplatesCompanion(
+        note: Value(note),
+        amount: Value(amount),
+        walletId: Value(walletId),
+        categoryId: Value(categoryId),
+        updatedAt: Value(_now()),
+      ),
+    );
+  }
+
+  Future<void> deleteTemplate(int id) =>
+      (db.delete(db.expenseTemplates)..where((t) => t.id.equals(id))).go();
+
+  /// Lưu thứ tự mới sau khi kéo thả: mẫu đứng đầu [ids] lên đầu hàng nút.
+  Future<void> reorderTemplates(List<int> ids) async {
+    await db.transaction(() async {
+      for (var i = 0; i < ids.length; i++) {
+        await (db.update(db.expenseTemplates)
+              ..where((t) => t.id.equals(ids[i])))
+            .write(ExpenseTemplatesCompanion(sortOrder: Value(i)));
+      }
+    });
+  }
+
+  Future<int> _nextTemplateSortOrder() async {
+    final t = db.expenseTemplates;
+    final maxExp = t.sortOrder.max();
+    final q = db.selectOnly(t)..addColumns([maxExp]);
+    return ((await q.getSingle()).read(maxExp) ?? -1) + 1;
+  }
+
+  /// Ghi một khoản chi theo mẫu, tại thời điểm [occurredAt].
+  ///
+  /// Đọc lại mẫu từ DB thay vì tin bản đang hiện trên màn hình, phòng khi ví
+  /// vừa bị lưu trữ hay danh mục vừa bị xoá. Trả về null nếu mẫu không còn
+  /// hoặc thiếu trường — khi đó nơi gọi phải mở màn ghi để người dùng điền nốt.
+  Future<int?> recordFromTemplate(
+    int templateId, {
+    required DateTime occurredAt,
+  }) async {
+    final t = await getTemplate(templateId);
+    if (t == null || !t.isOneTap) return null;
+    final note = t.template.note?.trim();
+    return addTransaction(
+      kind: TxKind.expense,
+      amount: t.template.amount!,
+      occurredAt: occurredAt,
+      walletFromId: t.template.walletId,
+      categoryId: t.template.categoryId,
+      note: note == null || note.isEmpty ? null : note,
+    );
+  }
+
   // ----- Danh mục -------------------------------------------------------
 
   Stream<List<Category>> watchCategories({
@@ -455,6 +651,9 @@ class Repository {
       await (db.update(db.transactions)..where((t) => t.categoryId.equals(id)))
           .write(const TransactionsCompanion(categoryId: Value(null)));
       await (db.delete(db.budgets)..where((b) => b.categoryId.equals(id))).go();
+      await (db.update(db.expenseTemplates)
+            ..where((t) => t.categoryId.equals(id)))
+          .write(const ExpenseTemplatesCompanion(categoryId: Value(null)));
       await (db.delete(db.categories)..where((c) => c.id.equals(id))).go();
     });
   }
@@ -501,7 +700,8 @@ class Repository {
   /// Công nợ theo từng người. Chỉ là một phép SUM nhờ cột debt_delta đã lưu
   /// sẵn dấu lúc ghi giao dịch.
   Stream<List<DebtSummary>> watchDebts({bool includeSettled = false}) {
-    final sql = '''
+    final sql =
+        '''
       SELECT p.*, COALESCE((
         SELECT SUM(t.debt_delta) FROM transactions t
         WHERE t.person_id = p.id AND t.deleted_at IS NULL
@@ -514,14 +714,16 @@ class Repository {
         .customSelect(sql, readsFrom: {db.people, db.transactions})
         .watch()
         .map((rows) {
-      final list = rows
-          .map((row) =>
-              DebtSummary(db.people.map(row.data), row.read<int>('net')))
-          .where((d) => includeSettled || d.net != 0)
-          .toList();
-      list.sort((a, b) => b.absAmount.compareTo(a.absAmount));
-      return list;
-    });
+          final list = rows
+              .map(
+                (row) =>
+                    DebtSummary(db.people.map(row.data), row.read<int>('net')),
+              )
+              .where((d) => includeSettled || d.net != 0)
+              .toList();
+          list.sort((a, b) => b.absAmount.compareTo(a.absAmount));
+          return list;
+        });
   }
 
   Stream<int> watchNetDebt(int personId) {
@@ -562,7 +764,9 @@ class Repository {
 
     if (walletId != null) {
       where.add('(t.wallet_from_id = ? OR t.wallet_to_id = ?)');
-      vars..add(Variable.withInt(walletId))..add(Variable.withInt(walletId));
+      vars
+        ..add(Variable.withInt(walletId))
+        ..add(Variable.withInt(walletId));
     }
     if (personId != null) {
       where.add('t.person_id = ?');
@@ -584,7 +788,8 @@ class Repository {
       vars.add(Variable.withString(kind.name));
     }
 
-    final sql = '''
+    final sql =
+        '''
       SELECT t.*,
              wf.name AS wf_name, wf.color_value AS wf_color, wf.icon_key AS wf_icon,
              wt.name AS wt_name, wt.color_value AS wt_color, wt.icon_key AS wt_icon,
@@ -604,12 +809,7 @@ class Repository {
         .customSelect(
           sql,
           variables: vars,
-          readsFrom: {
-            db.transactions,
-            db.wallets,
-            db.categories,
-            db.people,
-          },
+          readsFrom: {db.transactions, db.wallets, db.categories, db.people},
         )
         .watch()
         .map((rows) => rows.map(_rowToTxView).toList());
@@ -724,7 +924,9 @@ class Repository {
   }) {
     assert(amount > 0, 'amount phải dương, dấu suy ra từ kind');
     final now = _now();
-    return db.into(db.transactions).insert(
+    return db
+        .into(db.transactions)
+        .insert(
           TransactionsCompanion.insert(
             kind: kind,
             amount: amount,
@@ -781,19 +983,21 @@ class Repository {
 
   /// Xoá mềm, để còn hoàn tác được.
   Future<void> softDeleteTransaction(int id) =>
-      (db.update(db.transactions)..where((t) => t.id.equals(id)))
-          .write(TransactionsCompanion(deletedAt: Value(_now())));
+      (db.update(db.transactions)..where((t) => t.id.equals(id))).write(
+        TransactionsCompanion(deletedAt: Value(_now())),
+      );
 
   Future<void> restoreTransaction(int id) =>
-      (db.update(db.transactions)..where((t) => t.id.equals(id)))
-          .write(const TransactionsCompanion(deletedAt: Value(null)));
+      (db.update(db.transactions)..where((t) => t.id.equals(id))).write(
+        const TransactionsCompanion(deletedAt: Value(null)),
+      );
 
   /// Xoá cả nhóm giao dịch sinh cùng lúc (ví dụ cặp giao dịch của trả dùm).
   /// Trả về danh sách id để hoàn tác.
   Future<List<int>> softDeleteGroup(String groupId) async {
-    final rows = await (db.select(db.transactions)
-          ..where((t) => t.groupId.equals(groupId) & t.deletedAt.isNull()))
-        .get();
+    final rows = await (db.select(
+      db.transactions,
+    )..where((t) => t.groupId.equals(groupId) & t.deletedAt.isNull())).get();
     await (db.update(db.transactions)
           ..where((t) => t.groupId.equals(groupId) & t.deletedAt.isNull()))
         .write(TransactionsCompanion(deletedAt: Value(_now())));
@@ -801,8 +1005,9 @@ class Repository {
   }
 
   Future<void> restoreMany(List<int> ids) =>
-      (db.update(db.transactions)..where((t) => t.id.isIn(ids)))
-          .write(const TransactionsCompanion(deletedAt: Value(null)));
+      (db.update(db.transactions)..where((t) => t.id.isIn(ids))).write(
+        const TransactionsCompanion(deletedAt: Value(null)),
+      );
 
   Future<int> countInGroup(String groupId) async {
     final t = db.transactions;
@@ -841,26 +1046,30 @@ class Repository {
 
     await db.transaction(() async {
       if (myShare > 0) {
-        ids.add(await addTransaction(
-          kind: TxKind.expense,
-          amount: myShare,
-          occurredAt: occurredAt,
-          walletFromId: walletFromId,
-          categoryId: categoryId,
-          note: note,
-          groupId: groupId,
-        ));
+        ids.add(
+          await addTransaction(
+            kind: TxKind.expense,
+            amount: myShare,
+            occurredAt: occurredAt,
+            walletFromId: walletFromId,
+            categoryId: categoryId,
+            note: note,
+            groupId: groupId,
+          ),
+        );
       }
       for (final entry in sharesByPerson.entries) {
-        ids.add(await addTransaction(
-          kind: TxKind.lend,
-          amount: entry.value,
-          occurredAt: occurredAt,
-          walletFromId: walletFromId,
-          personId: entry.key,
-          note: note == null ? 'Trả dùm' : '$note (trả dùm)',
-          groupId: groupId,
-        ));
+        ids.add(
+          await addTransaction(
+            kind: TxKind.lend,
+            amount: entry.value,
+            occurredAt: occurredAt,
+            walletFromId: walletFromId,
+            personId: entry.key,
+            note: note == null ? 'Trả dùm' : '$note (trả dùm)',
+            groupId: groupId,
+          ),
+        );
       }
     });
 
@@ -869,8 +1078,9 @@ class Repository {
 
   /// Các giao dịch cùng một nhóm với giao dịch đã cho (kể cả chính nó).
   Future<List<TxView>> transactionsInGroup(String groupId) async {
-    final rows = await db.customSelect(
-      '''
+    final rows = await db
+        .customSelect(
+          '''
       SELECT t.*,
              wf.name AS wf_name, wf.color_value AS wf_color, wf.icon_key AS wf_icon,
              wt.name AS wt_name, wt.color_value AS wt_color, wt.icon_key AS wt_icon,
@@ -884,9 +1094,10 @@ class Repository {
       WHERE t.group_id = ? AND t.deleted_at IS NULL
       ORDER BY t.kind DESC, t.id
       ''',
-      variables: [Variable.withString(groupId)],
-      readsFrom: {db.transactions, db.wallets, db.categories, db.people},
-    ).get();
+          variables: [Variable.withString(groupId)],
+          readsFrom: {db.transactions, db.wallets, db.categories, db.people},
+        )
+        .get();
     return rows.map(_rowToTxView).toList();
   }
 
@@ -919,17 +1130,20 @@ class Repository {
   /// Tổng thu / chi trong tháng. Chỉ tính thu nhập và chi tiêu — chuyển ví,
   /// vay mượn và điều chỉnh số dư không phải tiêu dùng.
   Stream<MonthTotals> watchMonthTotals(int monthKey) {
-    return db.customSelect(
-      '''
+    return db
+        .customSelect(
+          '''
       SELECT
         COALESCE(SUM(CASE WHEN kind = 'income'  THEN amount END), 0) AS income,
         COALESCE(SUM(CASE WHEN kind = 'expense' THEN amount END), 0) AS expense
       FROM transactions
       WHERE deleted_at IS NULL AND month_key = ?
       ''',
-      variables: [Variable.withInt(monthKey)],
-      readsFrom: {db.transactions},
-    ).watchSingle().map(
+          variables: [Variable.withInt(monthKey)],
+          readsFrom: {db.transactions},
+        )
+        .watchSingle()
+        .map(
           (row) => MonthTotals(
             income: row.read<int>('income'),
             expense: row.read<int>('expense'),
@@ -944,8 +1158,9 @@ class Repository {
     String flow = 'expense',
   }) {
     final kind = flow == 'income' ? TxKind.income : TxKind.expense;
-    return db.customSelect(
-      '''
+    return db
+        .customSelect(
+          '''
       SELECT t.category_id AS cid,
              c.name        AS cname,
              c.color_value AS ccolor,
@@ -957,20 +1172,26 @@ class Repository {
       GROUP BY t.category_id
       ORDER BY total DESC
       ''',
-      variables: [
-        Variable.withInt(monthKey),
-        Variable.withString(kind.name),
-      ],
-      readsFrom: {db.transactions, db.categories},
-    ).watch().map((rows) => rows
-        .map((row) => CategoryTotal(
-              categoryId: row.read<int?>('cid'),
-              name: row.read<String?>('cname') ?? 'Chưa phân loại',
-              colorValue: row.read<int?>('ccolor'),
-              iconKey: row.read<String?>('cicon'),
-              total: row.read<int>('total'),
-            ))
-        .toList());
+          variables: [
+            Variable.withInt(monthKey),
+            Variable.withString(kind.name),
+          ],
+          readsFrom: {db.transactions, db.categories},
+        )
+        .watch()
+        .map(
+          (rows) => rows
+              .map(
+                (row) => CategoryTotal(
+                  categoryId: row.read<int?>('cid'),
+                  name: row.read<String?>('cname') ?? 'Chưa phân loại',
+                  colorValue: row.read<int?>('ccolor'),
+                  iconKey: row.read<String?>('cicon'),
+                  total: row.read<int>('total'),
+                ),
+              )
+              .toList(),
+        );
   }
 
   /// Vài khoản chi lớn nhất trong tháng.
@@ -1066,8 +1287,9 @@ class Repository {
   /// Dùng ở màn Tổng quan để trả lời câu "hôm nay mình đã tiêu bao nhiêu rồi",
   /// đối chiếu ngay với mức khuyến nghị mỗi ngày.
   Stream<Map<int, int>> watchSpentByCategoryOnDay(int dayKey) {
-    return db.customSelect(
-      '''
+    return db
+        .customSelect(
+          '''
       SELECT category_id AS cid, SUM(amount) AS total
       FROM transactions
       WHERE deleted_at IS NULL
@@ -1076,11 +1298,16 @@ class Repository {
         AND category_id IS NOT NULL
       GROUP BY category_id
       ''',
-      variables: [Variable.withInt(dayKey)],
-      readsFrom: {db.transactions},
-    ).watch().map((rows) => {
-          for (final row in rows) row.read<int>('cid'): row.read<int>('total'),
-        });
+          variables: [Variable.withInt(dayKey)],
+          readsFrom: {db.transactions},
+        )
+        .watch()
+        .map(
+          (rows) => {
+            for (final row in rows)
+              row.read<int>('cid'): row.read<int>('total'),
+          },
+        );
   }
 
   /// Tiền đã ra khỏi ví trong một ngày cho những việc NGOÀI các ngân sách:
@@ -1090,8 +1317,9 @@ class Repository {
   /// Khoản chi lấy từ quỹ không tính: tiền đó đã được để dành sẵn, không lấy
   /// từ tiền tự do.
   Stream<int> watchSpentOutsideBudgetsOnDay(int dayKey, int monthKey) {
-    return db.customSelect(
-      '''
+    return db
+        .customSelect(
+          '''
       SELECT COALESCE(SUM(t.amount), 0) AS total
       FROM transactions t
       WHERE t.deleted_at IS NULL
@@ -1110,9 +1338,11 @@ class Repository {
           ))
         )
       ''',
-      variables: [Variable.withInt(dayKey), Variable.withInt(monthKey)],
-      readsFrom: {db.transactions, db.budgets, db.categories},
-    ).watchSingle().map((row) => row.read<int>('total'));
+          variables: [Variable.withInt(dayKey), Variable.withInt(monthKey)],
+          readsFrom: {db.transactions, db.budgets, db.categories},
+        )
+        .watchSingle()
+        .map((row) => row.read<int>('total'));
   }
 
   /// Đặt hoặc cập nhật hạn mức cho một danh mục.
@@ -1134,13 +1364,17 @@ class Repository {
     await db.transaction(() async {
       final query = db.select(db.budgets)
         ..where((b) => b.categoryId.equals(categoryId))
-        ..where((b) => monthKey == null
-            ? b.monthKey.isNull()
-            : b.monthKey.equals(monthKey));
+        ..where(
+          (b) => monthKey == null
+              ? b.monthKey.isNull()
+              : b.monthKey.equals(monthKey),
+        );
       final existing = await query.getSingleOrNull();
 
       if (existing == null) {
-        await db.into(db.budgets).insert(
+        await db
+            .into(db.budgets)
+            .insert(
               BudgetsCompanion.insert(
                 categoryId: categoryId,
                 monthKey: Value(monthKey),
@@ -1150,8 +1384,9 @@ class Repository {
               ),
             );
       } else {
-        await (db.update(db.budgets)..where((b) => b.id.equals(existing.id)))
-            .write(
+        await (db.update(
+          db.budgets,
+        )..where((b) => b.id.equals(existing.id))).write(
           BudgetsCompanion(
             limitAmount: Value(limitAmount),
             updatedAt: Value(now),
@@ -1273,8 +1508,7 @@ class BudgetProgress {
   /// Mức tiêu trung bình mỗi ngày nếu chia đều hạn mức cả tháng.
   ///
   /// Ngân sách ăn uống 3 triệu cho tháng 30 ngày thì đây là 100k.
-  int get dailyAllowance =>
-      daysInMonth == 0 ? 0 : limitAmount ~/ daysInMonth;
+  int get dailyAllowance => daysInMonth == 0 ? 0 : limitAmount ~/ daysInMonth;
 
   /// Thực tế đang tiêu bao nhiêu một ngày.
   int get dailyAverage => daysElapsed == 0 ? 0 : spent ~/ daysElapsed;
