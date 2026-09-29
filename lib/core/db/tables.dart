@@ -171,6 +171,12 @@ class Transactions extends Table {
   /// dịch đưa tiền vào ví giữ quỹ thì quỹ tăng, lấy tiền ra thì quỹ giảm.
   IntColumn get fundId => integer().nullable().references(Funds, #id)();
 
+  /// Quỹ tăng (+) hay giảm (-) bao nhiêu vì giao dịch này. Xem [fundDeltaOf].
+  ///
+  /// Lưu sẵn chứ không suy ra lúc truy vấn, vì nạp / rút quỹ ngay trong chính
+  /// ví giữ quỹ có hai chân trùng nhau — từ chân ví không biết được chiều.
+  IntColumn get fundDelta => integer().withDefault(const Constant(0))();
+
   /// Tất toán không có dòng tiền (xoá nợ, cho luôn). Khi đó không ví nào bị
   /// đụng tới, nhưng công nợ vẫn về 0.
   BoolColumn get isWriteoff => boolean().withDefault(const Constant(false))();

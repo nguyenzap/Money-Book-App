@@ -1,6 +1,7 @@
 import 'package:drift/drift.dart';
 import 'package:uuid/uuid.dart';
 
+import '../domain/fund_delta.dart';
 import '../domain/tx_kind.dart';
 import '../format/dates.dart';
 import 'database.dart';
@@ -328,17 +329,34 @@ class Repository {
 
   /// Số tiền đang có trong quỹ `f`, dùng chung cho mọi truy vấn về quỹ.
   ///
-  /// Chiều tiền xét theo VÍ ĐANG GIỮ QUỸ chứ không phải theo chân ví nào có giá
-  /// trị: nạp quỹ là một lần chuyển ví nên có cả hai chân, nếu chỉ hỏi "chân
-  /// nào khác null" thì hai vế triệt tiêu và quỹ luôn bằng 0.
+  /// Chỉ là một phép SUM nhờ cột `fund_delta` đã lưu sẵn chiều lúc ghi (xem
+  /// [fundDeltaOf]). Không suy từ chân ví được nữa: nạp quỹ ngay trong ví giữ
+  /// quỹ có hai chân trùng nhau, hai vế triệt tiêu và quỹ sẽ luôn bằng 0.
   static const _fundSavedExpr = '''(
-        COALESCE((SELECT SUM(t.amount) FROM transactions t
-                  WHERE t.fund_id = f.id AND t.deleted_at IS NULL
-                    AND t.wallet_to_id = f.wallet_id), 0)
-        - COALESCE((SELECT SUM(t.amount) FROM transactions t
-                    WHERE t.fund_id = f.id AND t.deleted_at IS NULL
-                      AND t.wallet_from_id = f.wallet_id), 0)
+        COALESCE((SELECT SUM(t.fund_delta) FROM transactions t
+                  WHERE t.fund_id = f.id AND t.deleted_at IS NULL), 0)
       )''';
+
+  /// Tính `fund_delta` cho một giao dịch sắp ghi. Không gắn quỹ thì 0.
+  Future<int> _fundDeltaFor({
+    required int? fundId,
+    required int amount,
+    int? walletFromId,
+    int? walletToId,
+    bool? intoFund,
+  }) async {
+    if (fundId == null) return 0;
+    final fund = await (db.select(db.funds)..where((f) => f.id.equals(fundId)))
+        .getSingleOrNull();
+    if (fund == null) return 0;
+    return fundDeltaOf(
+      amount: amount,
+      fundWalletId: fund.walletId,
+      walletFromId: walletFromId,
+      walletToId: walletToId,
+      intoFund: intoFund,
+    );
+  }
 
   /// Tổng tiền đang nằm trong các quỹ chưa lưu trữ.
   ///
@@ -427,7 +445,12 @@ class Repository {
   Future<void> deleteFund(int id) async {
     await db.transaction(() async {
       await (db.update(db.transactions)..where((t) => t.fundId.equals(id)))
-          .write(const TransactionsCompanion(fundId: Value(null)));
+          .write(
+            const TransactionsCompanion(
+              fundId: Value(null),
+              fundDelta: Value(0),
+            ),
+          );
       await (db.delete(db.funds)..where((f) => f.id.equals(id))).go();
     });
   }
@@ -456,7 +479,8 @@ class Repository {
   ///
   /// Nếu ví nguồn và ví giữ quỹ là một thì không có tiền nào di chuyển, nhưng
   /// vẫn cần ghi để đánh dấu phần tiền đã được hứa — lúc đó dùng chính ví đó
-  /// làm cả hai chân.
+  /// làm cả hai chân. Số dư ví không đổi (vào bao nhiêu ra bấy nhiêu), còn
+  /// chiều của quỹ nằm ở `fund_delta`.
   Future<int> depositToFund({
     required int fundId,
     required int walletFromId,
@@ -473,11 +497,15 @@ class Repository {
       walletFromId: walletFromId,
       walletToId: walletToId,
       fundId: fundId,
+      intoFund: true,
       note: note,
     );
   }
 
   /// Rút tiền khỏi quỹ mà chưa tiêu: trả lại về ví chi tiêu.
+  ///
+  /// Rút về chính ví giữ quỹ thì tiền đứng yên, chỉ gỡ nhãn quỹ — số đó quay
+  /// lại phần tiêu được.
   Future<int> withdrawFromFund({
     required int fundId,
     required int walletFromId,
@@ -494,6 +522,7 @@ class Repository {
       walletFromId: walletFromId,
       walletToId: walletToId,
       fundId: fundId,
+      intoFund: false,
       note: note,
     );
   }
@@ -926,8 +955,10 @@ class Repository {
 
   /// Thêm giao dịch.
   ///
-  /// `debtDelta` và các khoá ngày tháng được suy ra tự động từ [kind] và
-  /// [occurredAt], để không nơi nào khác trong app phải tự tính dấu.
+  /// `debtDelta`, `fundDelta` và các khoá ngày tháng được suy ra tự động từ
+  /// [kind], chân ví và [occurredAt], để không nơi nào khác trong app phải tự
+  /// tính dấu. [intoFund] chỉ cần khi cả hai chân là ví giữ quỹ — xem
+  /// [fundDeltaOf].
   Future<int> addTransaction({
     required TxKind kind,
     required int amount,
@@ -937,13 +968,21 @@ class Repository {
     int? categoryId,
     int? personId,
     int? fundId,
+    bool? intoFund,
     String? note,
     String? groupId,
     int? recurringId,
     bool isWriteoff = false,
-  }) {
+  }) async {
     assert(amount > 0, 'amount phải dương, dấu suy ra từ kind');
     final now = _now();
+    final fundDelta = await _fundDeltaFor(
+      fundId: fundId,
+      amount: amount,
+      walletFromId: walletFromId,
+      walletToId: walletToId,
+      intoFund: intoFund,
+    );
     return db
         .into(db.transactions)
         .insert(
@@ -958,6 +997,7 @@ class Repository {
             categoryId: Value(categoryId),
             personId: Value(personId),
             fundId: Value(fundId),
+            fundDelta: Value(fundDelta),
             debtDelta: Value(kind.debtDelta(amount)),
             note: Value(note),
             groupId: Value(groupId),
@@ -980,9 +1020,21 @@ class Repository {
     int? personId,
     int? fundId,
     String? note,
-  }) {
+  }) async {
     assert(amount > 0);
-    return (db.update(db.transactions)..where((t) => t.id.equals(id))).write(
+    // Nạp / rút ngay trong ví giữ quỹ không suy được chiều từ chân ví, nên giữ
+    // chiều cũ của chính giao dịch này.
+    final old = await (db.select(db.transactions)
+          ..where((t) => t.id.equals(id)))
+        .getSingleOrNull();
+    final fundDelta = await _fundDeltaFor(
+      fundId: fundId,
+      amount: amount,
+      walletFromId: walletFromId,
+      walletToId: walletToId,
+      intoFund: old == null || old.fundDelta == 0 ? null : old.fundDelta > 0,
+    );
+    await (db.update(db.transactions)..where((t) => t.id.equals(id))).write(
       TransactionsCompanion(
         kind: Value(kind),
         amount: Value(amount),
@@ -994,6 +1046,7 @@ class Repository {
         categoryId: Value(categoryId),
         personId: Value(personId),
         fundId: Value(fundId),
+        fundDelta: Value(fundDelta),
         debtDelta: Value(kind.debtDelta(amount)),
         note: Value(note),
         updatedAt: Value(_now()),

@@ -7,6 +7,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import '../../core/db/database.dart';
+import '../../core/domain/fund_delta.dart';
 import '../../core/domain/tx_kind.dart';
 import '../../core/format/dates.dart';
 
@@ -14,7 +15,7 @@ import '../../core/format/dates.dart';
 ///
 /// Tăng lên mỗi khi cấu trúc file đổi, để bản app cũ biết mà từ chối file mới
 /// thay vì đọc bừa rồi hỏng dữ liệu.
-const kBackupFormatVersion = 3;
+const kBackupFormatVersion = 4;
 
 class BackupStats {
   const BackupStats({
@@ -283,10 +284,12 @@ class BackupService {
       }
 
       final fundIds = <int, int>{};
+      // Ví giữ từng quỹ (theo id mới), để tính lại chiều tiền của quỹ.
+      final fundWallets = <int, int>{};
       for (final row in fundRows) {
         final walletId = walletIds[row['walletId']];
         if (walletId == null) continue;
-        fundIds[row['id'] as int] = await db
+        final newId = fundIds[row['id'] as int] = await db
             .into(db.funds)
             .insert(
               FundsCompanion.insert(
@@ -303,6 +306,7 @@ class BackupService {
                 updatedAt: row['updatedAt'] as int? ?? 0,
               ),
             );
+        fundWallets[newId] = walletId;
       }
 
       for (final row in txRows) {
@@ -310,6 +314,22 @@ class BackupService {
         final amount = row['amount'] as int;
         final occurredAt = row['occurredAt'] as int;
         final local = DateTime.fromMillisecondsSinceEpoch(occurredAt);
+        final walletFromId = walletIds[row['walletFromId']];
+        final walletToId = walletIds[row['walletToId']];
+        final fundId = fundIds[row['fundId']];
+        // Tính lại từ chân ví như lúc ghi. File chỉ được hỏi đúng một điều mà
+        // chân ví không trả lời được: nạp / rút ngay trong ví giữ quỹ là chiều
+        // nào. File cũ không có trường này thì cũng không có trường hợp đó.
+        final fileDelta = row['fundDelta'] as int? ?? 0;
+        final fundDelta = fundId == null
+            ? 0
+            : fundDeltaOf(
+                amount: amount,
+                fundWalletId: fundWallets[fundId]!,
+                walletFromId: walletFromId,
+                walletToId: walletToId,
+                intoFund: fileDelta == 0 ? null : fileDelta > 0,
+              );
 
         await db
             .into(db.transactions)
@@ -322,11 +342,12 @@ class BackupService {
                 // múi giờ khác thì khoá tháng cũ sẽ sai với máy này.
                 dayKey: dayKeyOf(local),
                 monthKey: monthKeyOf(local),
-                walletFromId: Value(walletIds[row['walletFromId']]),
-                walletToId: Value(walletIds[row['walletToId']]),
+                walletFromId: Value(walletFromId),
+                walletToId: Value(walletToId),
                 categoryId: Value(categoryIds[row['categoryId']]),
                 personId: Value(personIds[row['personId']]),
-                fundId: Value(fundIds[row['fundId']]),
+                fundId: Value(fundId),
+                fundDelta: Value(fundDelta),
                 // Tính lại từ kind, không tin số trong file.
                 debtDelta: Value(kind.debtDelta(amount)),
                 note: Value(row['note'] as String?),
@@ -478,6 +499,7 @@ class BackupService {
     'categoryId': t.categoryId,
     'personId': t.personId,
     'fundId': t.fundId,
+    'fundDelta': t.fundDelta,
     'debtDelta': t.debtDelta,
     'note': t.note,
     'groupId': t.groupId,

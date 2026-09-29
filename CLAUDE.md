@@ -7,7 +7,7 @@ trong máy, không server, không tài khoản.
 
 ```powershell
 flutter run -d <device>                 # dev, hot reload bằng phím r
-flutter test                            # 255 test, chạy trong ~2 giây
+flutter test                            # 267 test, chạy trong ~2 giây
 flutter analyze
 dart run build_runner build             # BẮT BUỘC sau khi sửa lib/core/db/tables.dart
 flutter build apk --release --target-platform android-arm64
@@ -148,9 +148,14 @@ cho khỏi tiêu nhầm, nên số dư ví phải luôn khớp với app ngân h
 Không có loại giao dịch riêng: nạp quỹ là `transfer` có `fund_id`, chi từ quỹ là
 `expense` có `fund_id`. Công thức số dư ví vì thế không phải rẽ nhánh thêm.
 
-Chiều tiền của quỹ xét theo **ví đang giữ quỹ** (`funds.wallet_id`), không phải
-theo "chân ví nào khác null" — nạp quỹ có cả hai chân nên cách sau làm hai vế
-triệt tiêu và quỹ luôn bằng 0. Dùng chung biểu thức `Repository._fundSavedExpr`.
+**Quỹ dùng cột `fund_delta` lưu sẵn**, giống `debt_delta`: số quỹ chỉ là
+`SUM(fund_delta)` (`Repository._fundSavedExpr`). Chiều tính lúc ghi bằng
+`fundDeltaOf` (`lib/core/domain/fund_delta.dart`), xét theo **ví đang giữ quỹ**:
+tiền vào ví đó thì quỹ tăng, ra thì giảm. Không suy ra lúc truy vấn được, vì
+nạp / rút **ngay trong ví giữ quỹ** (tiền đã nằm sẵn đó, chỉ dán hoặc gỡ nhãn)
+có hai chân trùng nhau — vế vào và vế ra triệt tiêu, không còn biết chiều. Khi
+đó `addTransaction(intoFund: ...)` quyết định; sửa giao dịch thì giữ chiều cũ;
+nhập sao lưu tính lại từ chân ví và chỉ lấy dấu trong file cho trường hợp này.
 
 Tiền quỹ trừ khỏi `watchSpendableAssets` nhưng vẫn trong `watchTotalAssets`.
 

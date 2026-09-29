@@ -3677,6 +3677,18 @@ class $TransactionsTable extends Transactions
       'REFERENCES funds (id)',
     ),
   );
+  static const VerificationMeta _fundDeltaMeta = const VerificationMeta(
+    'fundDelta',
+  );
+  @override
+  late final GeneratedColumn<int> fundDelta = GeneratedColumn<int>(
+    'fund_delta',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
   static const VerificationMeta _isWriteoffMeta = const VerificationMeta(
     'isWriteoff',
   );
@@ -3742,6 +3754,7 @@ class $TransactionsTable extends Transactions
     groupId,
     recurringId,
     fundId,
+    fundDelta,
     isWriteoff,
     createdAt,
     updatedAt,
@@ -3857,6 +3870,12 @@ class $TransactionsTable extends Transactions
         fundId.isAcceptableOrUnknown(data['fund_id']!, _fundIdMeta),
       );
     }
+    if (data.containsKey('fund_delta')) {
+      context.handle(
+        _fundDeltaMeta,
+        fundDelta.isAcceptableOrUnknown(data['fund_delta']!, _fundDeltaMeta),
+      );
+    }
     if (data.containsKey('is_writeoff')) {
       context.handle(
         _isWriteoffMeta,
@@ -3956,6 +3975,10 @@ class $TransactionsTable extends Transactions
         DriftSqlType.int,
         data['${effectivePrefix}fund_id'],
       ),
+      fundDelta: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}fund_delta'],
+      )!,
       isWriteoff: attachedDatabase.typeMapping.read(
         DriftSqlType.bool,
         data['${effectivePrefix}is_writeoff'],
@@ -4026,6 +4049,12 @@ class Transaction extends DataClass implements Insertable<Transaction> {
   /// dịch đưa tiền vào ví giữ quỹ thì quỹ tăng, lấy tiền ra thì quỹ giảm.
   final int? fundId;
 
+  /// Quỹ tăng (+) hay giảm (-) bao nhiêu vì giao dịch này. Xem [fundDeltaOf].
+  ///
+  /// Lưu sẵn chứ không suy ra lúc truy vấn, vì nạp / rút quỹ ngay trong chính
+  /// ví giữ quỹ có hai chân trùng nhau — từ chân ví không biết được chiều.
+  final int fundDelta;
+
   /// Tất toán không có dòng tiền (xoá nợ, cho luôn). Khi đó không ví nào bị
   /// đụng tới, nhưng công nợ vẫn về 0.
   final bool isWriteoff;
@@ -4051,6 +4080,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     this.groupId,
     this.recurringId,
     this.fundId,
+    required this.fundDelta,
     required this.isWriteoff,
     required this.createdAt,
     required this.updatedAt,
@@ -4094,6 +4124,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     if (!nullToAbsent || fundId != null) {
       map['fund_id'] = Variable<int>(fundId);
     }
+    map['fund_delta'] = Variable<int>(fundDelta);
     map['is_writeoff'] = Variable<bool>(isWriteoff);
     map['created_at'] = Variable<int>(createdAt);
     map['updated_at'] = Variable<int>(updatedAt);
@@ -4134,6 +4165,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       fundId: fundId == null && nullToAbsent
           ? const Value.absent()
           : Value(fundId),
+      fundDelta: Value(fundDelta),
       isWriteoff: Value(isWriteoff),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
@@ -4166,6 +4198,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       groupId: serializer.fromJson<String?>(json['groupId']),
       recurringId: serializer.fromJson<int?>(json['recurringId']),
       fundId: serializer.fromJson<int?>(json['fundId']),
+      fundDelta: serializer.fromJson<int>(json['fundDelta']),
       isWriteoff: serializer.fromJson<bool>(json['isWriteoff']),
       createdAt: serializer.fromJson<int>(json['createdAt']),
       updatedAt: serializer.fromJson<int>(json['updatedAt']),
@@ -4193,6 +4226,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       'groupId': serializer.toJson<String?>(groupId),
       'recurringId': serializer.toJson<int?>(recurringId),
       'fundId': serializer.toJson<int?>(fundId),
+      'fundDelta': serializer.toJson<int>(fundDelta),
       'isWriteoff': serializer.toJson<bool>(isWriteoff),
       'createdAt': serializer.toJson<int>(createdAt),
       'updatedAt': serializer.toJson<int>(updatedAt),
@@ -4216,6 +4250,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     Value<String?> groupId = const Value.absent(),
     Value<int?> recurringId = const Value.absent(),
     Value<int?> fundId = const Value.absent(),
+    int? fundDelta,
     bool? isWriteoff,
     int? createdAt,
     int? updatedAt,
@@ -4236,6 +4271,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     groupId: groupId.present ? groupId.value : this.groupId,
     recurringId: recurringId.present ? recurringId.value : this.recurringId,
     fundId: fundId.present ? fundId.value : this.fundId,
+    fundDelta: fundDelta ?? this.fundDelta,
     isWriteoff: isWriteoff ?? this.isWriteoff,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
@@ -4268,6 +4304,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
           ? data.recurringId.value
           : this.recurringId,
       fundId: data.fundId.present ? data.fundId.value : this.fundId,
+      fundDelta: data.fundDelta.present ? data.fundDelta.value : this.fundDelta,
       isWriteoff: data.isWriteoff.present
           ? data.isWriteoff.value
           : this.isWriteoff,
@@ -4295,6 +4332,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
           ..write('groupId: $groupId, ')
           ..write('recurringId: $recurringId, ')
           ..write('fundId: $fundId, ')
+          ..write('fundDelta: $fundDelta, ')
           ..write('isWriteoff: $isWriteoff, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
@@ -4320,6 +4358,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     groupId,
     recurringId,
     fundId,
+    fundDelta,
     isWriteoff,
     createdAt,
     updatedAt,
@@ -4344,6 +4383,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
           other.groupId == this.groupId &&
           other.recurringId == this.recurringId &&
           other.fundId == this.fundId &&
+          other.fundDelta == this.fundDelta &&
           other.isWriteoff == this.isWriteoff &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt &&
@@ -4366,6 +4406,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
   final Value<String?> groupId;
   final Value<int?> recurringId;
   final Value<int?> fundId;
+  final Value<int> fundDelta;
   final Value<bool> isWriteoff;
   final Value<int> createdAt;
   final Value<int> updatedAt;
@@ -4386,6 +4427,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     this.groupId = const Value.absent(),
     this.recurringId = const Value.absent(),
     this.fundId = const Value.absent(),
+    this.fundDelta = const Value.absent(),
     this.isWriteoff = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
@@ -4407,6 +4449,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     this.groupId = const Value.absent(),
     this.recurringId = const Value.absent(),
     this.fundId = const Value.absent(),
+    this.fundDelta = const Value.absent(),
     this.isWriteoff = const Value.absent(),
     required int createdAt,
     required int updatedAt,
@@ -4434,6 +4477,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     Expression<String>? groupId,
     Expression<int>? recurringId,
     Expression<int>? fundId,
+    Expression<int>? fundDelta,
     Expression<bool>? isWriteoff,
     Expression<int>? createdAt,
     Expression<int>? updatedAt,
@@ -4455,6 +4499,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
       if (groupId != null) 'group_id': groupId,
       if (recurringId != null) 'recurring_id': recurringId,
       if (fundId != null) 'fund_id': fundId,
+      if (fundDelta != null) 'fund_delta': fundDelta,
       if (isWriteoff != null) 'is_writeoff': isWriteoff,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
@@ -4478,6 +4523,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     Value<String?>? groupId,
     Value<int?>? recurringId,
     Value<int?>? fundId,
+    Value<int>? fundDelta,
     Value<bool>? isWriteoff,
     Value<int>? createdAt,
     Value<int>? updatedAt,
@@ -4499,6 +4545,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
       groupId: groupId ?? this.groupId,
       recurringId: recurringId ?? this.recurringId,
       fundId: fundId ?? this.fundId,
+      fundDelta: fundDelta ?? this.fundDelta,
       isWriteoff: isWriteoff ?? this.isWriteoff,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
@@ -4556,6 +4603,9 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     if (fundId.present) {
       map['fund_id'] = Variable<int>(fundId.value);
     }
+    if (fundDelta.present) {
+      map['fund_delta'] = Variable<int>(fundDelta.value);
+    }
     if (isWriteoff.present) {
       map['is_writeoff'] = Variable<bool>(isWriteoff.value);
     }
@@ -4589,6 +4639,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
           ..write('groupId: $groupId, ')
           ..write('recurringId: $recurringId, ')
           ..write('fundId: $fundId, ')
+          ..write('fundDelta: $fundDelta, ')
           ..write('isWriteoff: $isWriteoff, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
@@ -8550,6 +8601,7 @@ typedef $$TransactionsTableCreateCompanionBuilder =
       Value<String?> groupId,
       Value<int?> recurringId,
       Value<int?> fundId,
+      Value<int> fundDelta,
       Value<bool> isWriteoff,
       required int createdAt,
       required int updatedAt,
@@ -8572,6 +8624,7 @@ typedef $$TransactionsTableUpdateCompanionBuilder =
       Value<String?> groupId,
       Value<int?> recurringId,
       Value<int?> fundId,
+      Value<int> fundDelta,
       Value<bool> isWriteoff,
       Value<int> createdAt,
       Value<int> updatedAt,
@@ -8750,6 +8803,11 @@ class $$TransactionsTableFilterComposer
 
   ColumnFilters<String> get groupId => $composableBuilder(
     column: $table.groupId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get fundDelta => $composableBuilder(
+    column: $table.fundDelta,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -8966,6 +9024,11 @@ class $$TransactionsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get fundDelta => $composableBuilder(
+    column: $table.fundDelta,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<bool> get isWriteoff => $composableBuilder(
     column: $table.isWriteoff,
     builder: (column) => ColumnOrderings(column),
@@ -9162,6 +9225,9 @@ class $$TransactionsTableAnnotationComposer
 
   GeneratedColumn<String> get groupId =>
       $composableBuilder(column: $table.groupId, builder: (column) => column);
+
+  GeneratedColumn<int> get fundDelta =>
+      $composableBuilder(column: $table.fundDelta, builder: (column) => column);
 
   GeneratedColumn<bool> get isWriteoff => $composableBuilder(
     column: $table.isWriteoff,
@@ -9367,6 +9433,7 @@ class $$TransactionsTableTableManager
                 Value<String?> groupId = const Value.absent(),
                 Value<int?> recurringId = const Value.absent(),
                 Value<int?> fundId = const Value.absent(),
+                Value<int> fundDelta = const Value.absent(),
                 Value<bool> isWriteoff = const Value.absent(),
                 Value<int> createdAt = const Value.absent(),
                 Value<int> updatedAt = const Value.absent(),
@@ -9387,6 +9454,7 @@ class $$TransactionsTableTableManager
                 groupId: groupId,
                 recurringId: recurringId,
                 fundId: fundId,
+                fundDelta: fundDelta,
                 isWriteoff: isWriteoff,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
@@ -9409,6 +9477,7 @@ class $$TransactionsTableTableManager
                 Value<String?> groupId = const Value.absent(),
                 Value<int?> recurringId = const Value.absent(),
                 Value<int?> fundId = const Value.absent(),
+                Value<int> fundDelta = const Value.absent(),
                 Value<bool> isWriteoff = const Value.absent(),
                 required int createdAt,
                 required int updatedAt,
@@ -9429,6 +9498,7 @@ class $$TransactionsTableTableManager
                 groupId: groupId,
                 recurringId: recurringId,
                 fundId: fundId,
+                fundDelta: fundDelta,
                 isWriteoff: isWriteoff,
                 createdAt: createdAt,
                 updatedAt: updatedAt,

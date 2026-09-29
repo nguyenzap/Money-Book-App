@@ -166,7 +166,7 @@ void main() {
 
     test('migration chạy được và lên đúng phiên bản', () async {
       final row = await db.customSelect('PRAGMA user_version').getSingle();
-      expect(row.data.values.first, 3);
+      expect(row.data.values.first, 4);
     });
 
     test('bảng mẫu chi tiêu đã có và dùng được ngay', () async {
@@ -246,6 +246,88 @@ void main() {
     });
   });
 
+  group('nâng cấp từ v3: chiều tiền quỹ được điền lại', () {
+    /// Bản v3: đã có quỹ và mẫu chi tiêu, nhưng chưa có cột fund_delta.
+    Database makeV3Database() {
+      final db = makeV1Database();
+      db.execute('PRAGMA user_version = 3');
+      db.execute('''
+        CREATE TABLE funds (
+          id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL,
+          wallet_id INTEGER NOT NULL REFERENCES wallets (id),
+          target_amount INTEGER NULL,
+          due_day_key INTEGER NULL,
+          note TEXT NULL,
+          icon_key TEXT NULL,
+          color_value INTEGER NULL,
+          is_archived INTEGER NOT NULL DEFAULT 0 CHECK (is_archived IN (0, 1)),
+          sort_order INTEGER NOT NULL DEFAULT 0,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL
+        )
+      ''');
+      db.execute(
+        'ALTER TABLE transactions ADD COLUMN fund_id INTEGER NULL '
+        'REFERENCES funds (id)',
+      );
+      db.execute('''
+        CREATE TABLE expense_templates (
+          id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+          note TEXT NULL,
+          amount INTEGER NULL,
+          wallet_id INTEGER NULL REFERENCES wallets (id),
+          category_id INTEGER NULL REFERENCES categories (id),
+          sort_order INTEGER NOT NULL DEFAULT 0,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL
+        )
+      ''');
+
+      // Quỹ KTX giữ ở Techcombank (ví 2): nạp 2tr từ MoMo, rút 300k về MoMo,
+      // chi 500k từ quỹ. Còn lại 1,2tr.
+      db.execute(
+        "INSERT INTO funds (id, name, wallet_id, created_at, updated_at) "
+        "VALUES (1, 'Tiền KTX', 2, 0, 0)",
+      );
+      for (final (kind, amount, from, to) in <(String, int, int, int?)>[
+        ('transfer', 2000000, 1, 2),
+        ('transfer', 300000, 2, 1),
+        ('expense', 500000, 2, null),
+      ]) {
+        db.execute(
+          'INSERT INTO transactions (kind, amount, occurred_at, day_key, '
+          'month_key, wallet_from_id, wallet_to_id, fund_id, created_at, '
+          'updated_at) VALUES (?, ?, 0, 20260910, 202609, ?, ?, 1, 0, 0)',
+          [kind, amount, from, to],
+        );
+      }
+      return db;
+    }
+
+    test('số dư quỹ giữ nguyên sau khi nâng cấp', () async {
+      final db =
+          AppDatabase.forTesting(NativeDatabase.opened(makeV3Database()));
+      addTearDown(db.close);
+      final repo = Repository(db);
+      await db.customStatement('SELECT 1');
+
+      expect(await repo.savedInFund(1), 1200000);
+      expect(await repo.watchTotalInFunds().first, 1200000);
+
+      final all = await db.select(db.transactions).get();
+      expect(
+        all.where((t) => t.fundId == 1).map((t) => t.fundDelta),
+        unorderedEquals([2000000, -300000, -500000]),
+      );
+      expect(
+        all.where((t) => t.fundId == null).every((t) => t.fundDelta == 0),
+        isTrue,
+        reason: 'giao dịch không gắn quỹ không bị đụng tới',
+      );
+    });
+  });
+
   group('cài mới hoàn toàn', () {
     test('database mới có sẵn cả bảng quỹ', () async {
       final db = AppDatabase.forTesting(NativeDatabase.memory());
@@ -254,7 +336,7 @@ void main() {
       await db.customStatement('SELECT 1');
 
       final row = await db.customSelect('PRAGMA user_version').getSingle();
-      expect(row.data.values.first, 3);
+      expect(row.data.values.first, 4);
       expect(await repo.watchFunds().first, isEmpty);
       expect(await repo.watchTemplates().first, isEmpty);
       expect(await repo.watchTotalInFunds().first, 0);

@@ -238,7 +238,8 @@ class _TxEditorScreenState extends ConsumerState<TxEditorScreen> {
     if (_kind == TxKind.transfer) {
       if (_walletFromId == null) return 'Hãy chọn ví nguồn';
       if (_walletToId == null) return 'Hãy chọn ví nhận';
-      if (_walletFromId == _walletToId) {
+      // Nạp / rút quỹ ngay trong ví giữ quỹ thì hai chân trùng nhau là đúng.
+      if (_walletFromId == _walletToId && _fundId == null) {
         return 'Ví nguồn và ví nhận phải khác nhau';
       }
       return null;
@@ -505,7 +506,7 @@ class _TxEditorScreenState extends ConsumerState<TxEditorScreen> {
           icon: Icons.login,
           wallets: wallets,
           value: _walletToId,
-          excludeId: _walletFromId,
+          excludeId: _fundId == null ? _walletFromId : null,
           onChanged: (v) => setState(() => _walletToId = v),
         ),
       ]);

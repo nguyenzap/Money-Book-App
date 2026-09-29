@@ -32,7 +32,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.e);
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -62,6 +62,22 @@ class AppDatabase extends _$AppDatabase {
           // v3: mẫu chi tiêu để ghi một chạm.
           if (from < 3) {
             await m.createTable(expenseTemplates);
+          }
+          // v4: lưu sẵn chiều tiền của quỹ, để nạp / rút ngay trong ví giữ
+          // quỹ được. Dữ liệu cũ tính lại bằng đúng công thức cũ (theo chân ví
+          // so với ví giữ quỹ) nên số dư các quỹ không đổi.
+          if (from < 4) {
+            await m.addColumn(transactions, transactions.fundDelta);
+            await customStatement('''
+              UPDATE transactions SET fund_delta = COALESCE((
+                SELECT CASE WHEN transactions.wallet_to_id = f.wallet_id
+                            THEN transactions.amount ELSE 0 END
+                     - CASE WHEN transactions.wallet_from_id = f.wallet_id
+                            THEN transactions.amount ELSE 0 END
+                FROM funds f WHERE f.id = transactions.fund_id
+              ), 0)
+              WHERE fund_id IS NOT NULL
+            ''');
           }
         },
         beforeOpen: (details) async {

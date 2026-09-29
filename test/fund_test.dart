@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:moneybook/core/db/database.dart';
 import 'package:moneybook/core/db/repository.dart';
 import 'package:moneybook/core/domain/tx_kind.dart';
+import 'package:moneybook/features/backup/backup_service.dart';
 
 /// Quỹ tái tạo hành vi thật: tiền dành cho khoản đã biết trước được chuyển sang
 /// một ngân hàng ít dùng, nên nó vẫn là tiền trong ví thật, chỉ là không được
@@ -196,6 +197,122 @@ void main() {
       expect(await repo.balanceOf(momo), 3500000);
       expect(await repo.watchSpendableAssets().first, 3500000,
           reason: 'rút ra thì tiền quay lại phần tiêu được');
+    });
+  });
+
+  group('nạp / rút ngay trong ví giữ quỹ', () {
+    // Tiền đã nằm sẵn ở MoMo, quỹ cũng giữ ở MoMo: không có tiền nào di
+    // chuyển, chỉ dán nhãn hoặc gỡ nhãn.
+    Future<int> depositInPlace(int fund, int amount) => repo.depositToFund(
+          fundId: fund,
+          walletFromId: momo,
+          walletToId: momo,
+          amount: amount,
+          occurredAt: DateTime(2026, 9, 10),
+        );
+
+    Future<int> withdrawInPlace(int fund, int amount) =>
+        repo.withdrawFromFund(
+          fundId: fund,
+          walletFromId: momo,
+          walletToId: momo,
+          amount: amount,
+          occurredAt: DateTime(2026, 9, 20),
+        );
+
+    test('nạp tại chỗ: quỹ tăng, số dư ví đứng yên, tiền tiêu được giảm',
+        () async {
+      final fund = await newFund('Quỹ EX', target: 1000000, walletId: momo);
+      await depositInPlace(fund, 1000000);
+
+      expect(await repo.savedInFund(fund), 1000000,
+          reason: 'trước đây hai chân triệt tiêu nên quỹ luôn bằng 0');
+      expect(await repo.balanceOf(momo), 5000000,
+          reason: 'số dư phải khớp app MoMo: không có tiền nào di chuyển');
+      expect(await repo.watchTotalAssets().first, 5000000);
+      expect(await repo.watchSpendableAssets().first, 4000000);
+      expect((await repo.watchFunds().first).single.isComplete, isTrue);
+      expect((await repo.watchMonthTotals(202609).first).expense, 0);
+    });
+
+    test('quỹ đủ rồi thì rút tại chỗ về chính ví giữ quỹ', () async {
+      final fund = await newFund('Quỹ EX', target: 1000000, walletId: momo);
+      await depositInPlace(fund, 1000000);
+      await withdrawInPlace(fund, 1000000);
+
+      expect(await repo.savedInFund(fund), 0);
+      expect(await repo.balanceOf(momo), 5000000);
+      expect(await repo.watchSpendableAssets().first, 5000000,
+          reason: 'gỡ nhãn thì tiền quay lại phần tiêu được');
+    });
+
+    test('rút tại chỗ quỹ nạp từ ví khác', () async {
+      final fund = await newFund('Tiền KTX', target: 2000000);
+      await deposit(fund, 2000000);
+      await repo.withdrawFromFund(
+        fundId: fund,
+        walletFromId: techcom,
+        walletToId: techcom,
+        amount: 500000,
+        occurredAt: DateTime(2026, 9, 20),
+      );
+
+      expect(await repo.savedInFund(fund), 1500000);
+      expect(await repo.balanceOf(techcom), 2000000);
+      expect(await repo.balanceOf(momo), 3000000);
+    });
+
+    test('xoá mềm rồi hoàn tác khoản nạp tại chỗ', () async {
+      final fund = await newFund('Quỹ EX', walletId: momo);
+      final tx = await depositInPlace(fund, 400000);
+
+      await repo.softDeleteTransaction(tx);
+      expect(await repo.savedInFund(fund), 0);
+      await repo.restoreTransaction(tx);
+      expect(await repo.savedInFund(fund), 400000);
+    });
+
+    test('sửa số tiền khoản rút tại chỗ vẫn giữ đúng chiều rút', () async {
+      final fund = await newFund('Quỹ EX', walletId: momo);
+      await depositInPlace(fund, 1000000);
+      final tx = await withdrawInPlace(fund, 200000);
+
+      await repo.updateTransaction(
+        id: tx,
+        kind: TxKind.transfer,
+        amount: 300000,
+        occurredAt: DateTime(2026, 9, 20),
+        walletFromId: momo,
+        walletToId: momo,
+        fundId: fund,
+      );
+      expect(await repo.savedInFund(fund), 700000);
+    });
+
+    test('xoá quỹ thì nhãn tại chỗ mất theo, tiền về phần tiêu được', () async {
+      final fund = await newFund('Quỹ EX', walletId: momo);
+      await depositInPlace(fund, 1000000);
+      await repo.deleteFund(fund);
+
+      expect(await repo.watchTotalInFunds().first, 0);
+      expect(await repo.watchSpendableAssets().first, 5000000);
+      expect(await repo.balanceOf(momo), 5000000);
+    });
+
+    test('sao lưu giữ đúng chiều của nạp / rút tại chỗ', () async {
+      final fund = await newFund('Quỹ EX', walletId: momo);
+      await depositInPlace(fund, 900000);
+      await withdrawInPlace(fund, 250000);
+      expect(await repo.savedInFund(fund), 650000);
+      final json = await BackupService(db).buildJson();
+
+      final target = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(target.close);
+      await target.customStatement('PRAGMA foreign_keys = ON');
+      await BackupService(target).import(json, mode: ImportMode.replace);
+      final restored = (await Repository(target).watchFunds().first).single;
+
+      expect(restored.saved, 650000);
     });
   });
 

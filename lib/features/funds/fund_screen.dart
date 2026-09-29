@@ -352,11 +352,17 @@ class _FundTransferSheetState extends ConsumerState<_FundTransferSheet> {
   }
 
   /// Chọn sẵn một ví chi tiêu để chỉ còn bấm xác nhận.
+  ///
+  /// Ưu tiên ví khác ví giữ quỹ như trước; chỉ có mỗi ví giữ quỹ thì chọn
+  /// luôn nó — nạp / rút tại chỗ là trường hợp hợp lệ.
   void _pickDefaultWallet(List<WalletWithBalance> wallets) {
     if (_otherWalletId != null) return;
-    final candidates =
-        wallets.where((w) => w.id != widget.progress.fund.walletId).toList();
-    if (candidates.isEmpty) return;
+    final fundWallet = widget.progress.fund.walletId;
+    final candidates = wallets.where((w) => w.id != fundWallet).toList();
+    if (candidates.isEmpty) {
+      if (wallets.any((w) => w.id == fundWallet)) _otherWalletId = fundWallet;
+      return;
+    }
     // Nạp thì lấy ví nhiều tiền nhất cho chắc đủ; rút thì trả về ví đầu.
     _otherWalletId = widget.withdraw
         ? candidates.first.id
@@ -457,16 +463,9 @@ class _FundTransferSheetState extends ConsumerState<_FundTransferSheet> {
               error: (e, _) => Text('Lỗi: $e'),
               data: (list) {
                 _pickDefaultWallet(list);
-                final items = list
-                    .where((w) => w.id != widget.progress.fund.walletId)
-                    .toList();
-
-                if (items.isEmpty) {
-                  return Text(
-                    'Cần ít nhất hai ví: một ví chi tiêu và một ví giữ quỹ.',
-                    style: TextStyle(color: scheme.error, fontSize: 13),
-                  );
-                }
+                // Có cả ví giữ quỹ: tiền đã nằm sẵn ở đó thì nạp tại chỗ, quỹ
+                // đủ rồi thì rút tại chỗ để tiêu.
+                final items = list;
 
                 return DropdownButtonFormField<int>(
                   initialValue: _otherWalletId,
@@ -492,7 +491,9 @@ class _FundTransferSheetState extends ConsumerState<_FundTransferSheet> {
                             const SizedBox(width: 10),
                             Expanded(
                               child: Text(
-                                w.name,
+                                w.id == widget.progress.fund.walletId
+                                    ? '${w.name} (ví giữ quỹ)'
+                                    : w.name,
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
@@ -520,11 +521,19 @@ class _FundTransferSheetState extends ConsumerState<_FundTransferSheet> {
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Text(
-                widget.withdraw
-                    ? 'Chuyển ${formatVnd(_amount)} từ $fundWalletName về ví '
-                        'chi tiêu. Tiền quay lại phần tiêu được.'
-                    : 'Chuyển ${formatVnd(_amount)} sang $fundWalletName. '
-                        'Số này sẽ không còn tính vào tiền tiêu được.',
+                _otherWalletId == widget.progress.fund.walletId
+                    // Cùng một ví: không có tiền nào di chuyển, chỉ đổi nhãn.
+                    ? (widget.withdraw
+                        ? '${formatVnd(_amount)} vẫn nằm ở $fundWalletName, '
+                            'chỉ bỏ nhãn quỹ. Số này quay lại phần tiêu được.'
+                        : '${formatVnd(_amount)} đang có sẵn ở $fundWalletName '
+                            'được dành cho quỹ. Số dư ví không đổi, nhưng số '
+                            'này không còn tính vào tiền tiêu được.')
+                    : widget.withdraw
+                        ? 'Chuyển ${formatVnd(_amount)} từ $fundWalletName về '
+                            'ví chi tiêu. Tiền quay lại phần tiêu được.'
+                        : 'Chuyển ${formatVnd(_amount)} sang $fundWalletName. '
+                            'Số này sẽ không còn tính vào tiền tiêu được.',
                 style: TextStyle(
                   fontSize: 12.5,
                   color: scheme.onSurfaceVariant,
