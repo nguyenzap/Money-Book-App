@@ -217,14 +217,32 @@ class _WalletTile extends ConsumerWidget {
           return;
         }
 
+        // Quỹ neo vào ví nào thì ví đó giữ tiền quỹ; xoá ví là quỹ mất chỗ.
+        final funds = await repo.countFundsOfWallet(item.id);
+        if (!context.mounted) return;
+        if (funds > 0) {
+          showSnack(
+            context,
+            '"${item.name}" đang giữ $funds quỹ. Chuyển quỹ sang ví khác '
+            'hoặc xoá quỹ trước.',
+          );
+          return;
+        }
+
         final ok = await confirmDialog(
           context,
           title: 'Xoá ví?',
           message: 'Xoá "${item.name}". Ví này chưa có giao dịch nào.',
         );
-        if (ok) {
+        if (!ok) return;
+        try {
           await repo.deleteWallet(item.id);
           if (context.mounted) showSnack(context, 'Đã xoá ví');
+        } catch (_) {
+          // Không để lệnh xoá thất bại trong im lặng như trước.
+          if (context.mounted) {
+            showSnack(context, 'Không xoá được ví. Hãy lưu trữ thay thế.');
+          }
         }
     }
   }

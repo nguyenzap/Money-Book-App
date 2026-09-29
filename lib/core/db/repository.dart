@@ -288,13 +288,33 @@ class Repository {
   /// nếu không lịch sử sẽ thủng một lỗ.
   ///
   /// Mẫu chi tiêu trỏ tới ví này thì chỉ mất ví, lần bấm sau sẽ hỏi lại.
+  ///
+  /// Giao dịch đã xoá mềm thì xoá hẳn: chúng không được đếm là "có giao dịch"
+  /// nhưng vẫn giữ khoá ngoại tới ví, để lại thì SQLite chặn lệnh xoá. Ví đang
+  /// giữ quỹ vẫn bị chặn — xem [countFundsOfWallet].
   Future<void> deleteWallet(int id) async {
     await db.transaction(() async {
+      await (db.delete(db.transactions)
+            ..where((t) =>
+                t.deletedAt.isNotNull() &
+                (t.walletFromId.equals(id) | t.walletToId.equals(id))))
+          .go();
       await (db.update(db.expenseTemplates)
             ..where((t) => t.walletId.equals(id)))
           .write(const ExpenseTemplatesCompanion(walletId: Value(null)));
       await (db.delete(db.wallets)..where((w) => w.id.equals(id))).go();
     });
+  }
+
+  /// Số quỹ (kể cả đã lưu trữ) đang neo vào ví này. Khác 0 thì không xoá
+  /// được ví: quỹ sẽ mất chỗ neo.
+  Future<int> countFundsOfWallet(int walletId) async {
+    final f = db.funds;
+    final countExp = f.id.count();
+    final q = db.selectOnly(f)
+      ..addColumns([countExp])
+      ..where(f.walletId.equals(walletId));
+    return (await q.getSingle()).read(countExp) ?? 0;
   }
 
   Future<int> nextWalletSortOrder() async {
