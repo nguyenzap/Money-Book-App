@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 
+/// Icon vẽ riêng, nằm trong font `MoneyBookIcons` (dựng bằng
+/// `tool/build_icon_font.py`). Phải là `const` để tree-shaking giữ lại glyph.
+const kSnackIcon = IconData(0xE001, fontFamily: 'MoneyBookIcons');
+
 /// Icon được lưu xuống DB bằng khoá dạng chuỗi thay vì mã điểm ảnh, để việc
 /// bật tree-shaking icon lúc build release không làm mất icon, và để file sao
 /// lưu vẫn đọc được bằng mắt.
@@ -15,6 +19,7 @@ const kIconMap = <String, IconData>{
   // Chi tiêu
   'food': Icons.restaurant,
   'coffee': Icons.local_cafe,
+  'snack': kSnackIcon,
   'transport': Icons.directions_bike,
   'car': Icons.directions_car,
   'fuel': Icons.local_gas_station,
@@ -66,6 +71,7 @@ const kWalletIconKeys = [
 const kCategoryIconKeys = [
   'food',
   'coffee',
+  'snack',
   'transport',
   'car',
   'fuel',
