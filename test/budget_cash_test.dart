@@ -12,6 +12,7 @@ BudgetProgress makeProgress({
   required int spent,
   required int daysElapsed,
   int daysInMonth = 30,
+  int? spentToday,
 }) {
   return BudgetProgress(
     budgetId: categoryId,
@@ -23,6 +24,7 @@ BudgetProgress makeProgress({
     monthKey: 202609,
     daysInMonth: daysInMonth,
     daysElapsed: daysElapsed,
+    spentToday: spentToday,
   );
 }
 
@@ -139,6 +141,118 @@ void main() {
     });
   });
 
+  group('tiền dư sang tiền tự do', () {
+    // Hạn mức 3tr/30 ngày = 100k/ngày, hôm nay là ngày 11.
+
+    test('tiêu dư thì mốc hôm nay vẫn là nhịp đều, phần dư nhả ra', () {
+      final b = makeProgress(
+        limit: 3000000,
+        spent: 600000,
+        daysElapsed: 11,
+        spentToday: 0,
+      );
+      expect(b.unusedBeforeToday, 400000);
+      expect(b.reserved, 2000000);
+      expect(b.budgetForToday(0), 100000);
+      expect(b.remainingDailyAllowance, 100000);
+      expect(b.remaining, 2400000, reason: 'hạn mức tháng giữ nguyên');
+    });
+
+    test('dư một phần sau khi đã lấp chỗ hụt', () {
+      // Lố 300k rồi tiết kiệm lại 350k: lấp đủ 300k, nhả ra 50k.
+      final b = makeProgress(
+        limit: 3000000,
+        spent: 950000,
+        daysElapsed: 11,
+        spentToday: 0,
+      );
+      expect(b.hole, 0);
+      expect(b.unusedBeforeToday, 50000);
+      expect(b.budgetForToday(0), 100000);
+    });
+
+    test('đang hụt thì không nhả gì, mốc hạ như cũ', () {
+      final b = makeProgress(
+        limit: 3000000,
+        spent: 1300000,
+        daysElapsed: 11,
+        spentToday: 0,
+      );
+      expect(b.unusedBeforeToday, 0);
+      expect(b.reserved, b.remaining);
+      expect(b.budgetForToday(0), 1700000 ~/ 20);
+    });
+
+    test('không có spentToday thì giữ cách tính cũ', () {
+      final b = makeProgress(limit: 3000000, spent: 600000, daysElapsed: 11);
+      expect(b.unusedBeforeToday, 0);
+      expect(b.reserved, b.remaining);
+    });
+
+    test('chặn bằng tiền thật theo phần còn giữ', () {
+      final b = makeProgress(
+        limit: 3000000,
+        spent: 600000,
+        daysElapsed: 11,
+        spentToday: 0,
+      );
+      // Còn giữ 2tr, ví có 2,2tr: đủ, dù hạn mức tháng còn 2,4tr.
+      final ok = capBudgetsByCash([b], 2200000).single;
+      expect(ok.isLimitedByCash, isFalse);
+      expect(ok.spendable, 2000000);
+      final low = capBudgetsByCash([b], 1000000).single;
+      expect(low.isLimitedByCash, isTrue);
+      expect(low.spendable, 1000000);
+    });
+  });
+
+  group('gợi ý lấp chỗ hụt', () {
+    BudgetProgress withHole(int hole, {int daysElapsed = 11}) => makeProgress(
+      limit: 3000000,
+      spent: 100000 * (daysElapsed - 1) + hole,
+      daysElapsed: daysElapsed,
+      spentToday: 0,
+    );
+
+    test('hụt 20k: bớt đúng 20k một ngày là xong', () {
+      final b = withHole(20000);
+      expect(b.hole, 20000);
+      expect(b.recoveryCut, 20000);
+      expect(b.recoveryLimit, 80000);
+      expect(b.daysToRecover, 1);
+    });
+
+    test('hụt 50k: bớt 25% trong 2 ngày', () {
+      final b = withHole(50000);
+      expect(b.recoveryLimit, 75000);
+      expect(b.daysToRecover, 2);
+    });
+
+    test('hụt 300k: bớt 25% trong 12 ngày', () {
+      final b = withHole(300000);
+      expect(b.recoveryLimit, 75000);
+      expect(b.daysToRecover, 12);
+      expect(
+        b.recoveryLimit < b.budgetForToday(0),
+        isTrue,
+        reason: 'gợi ý chặt hơn mốc, mốc không bị ép theo',
+      );
+    });
+
+    test('hụt 300k mà chỉ còn 6 ngày: gợi ý bằng mức chia đều', () {
+      final b = withHole(300000, daysElapsed: 25);
+      expect(b.recoveryLimit, 50000);
+      expect(b.daysToRecover, 6);
+      expect(b.budgetForToday(0), 50000);
+    });
+
+    test('không hụt thì không gợi ý', () {
+      final b = withHole(0);
+      expect(b.recoveryCut, 0);
+      expect(b.daysToRecover, 0);
+    });
+  });
+
   group('trên cơ sở dữ liệu', () {
     late AppDatabase db;
     late Repository repo;
@@ -172,6 +286,14 @@ void main() {
     test('khoản ghi bù cho hôm qua hạ mốc của hôm nay', () async {
       await repo.setBudget(categoryId: food, limitAmount: 3000000);
       final today = DateTime(2026, 9, 11);
+      // 9 ngày đầu tiêu đúng nhịp 100k/ngày.
+      await repo.addTransaction(
+        kind: TxKind.expense,
+        amount: 900000,
+        occurredAt: DateTime(2026, 9, 5, 12),
+        walletFromId: wallet,
+        categoryId: food,
+      );
 
       final before = (await repo.watchBudgets(202609, now: today).first).single;
 
@@ -186,7 +308,38 @@ void main() {
 
       expect(after.daysElapsed, 11);
       expect(after.budgetForToday(0) < before.budgetForToday(0), isTrue);
-      expect(after.budgetForToday(0), 2600000 ~/ 20);
+      expect(after.budgetForToday(0), 1700000 ~/ 20);
+      expect(after.hole, 300000);
+    });
+
+    test('tiền dư những ngày trước nhả ra, chi hôm nay vẫn tính vào mốc',
+        () async {
+      await repo.setBudget(categoryId: food, limitAmount: 3000000);
+      final today = DateTime(2026, 9, 11);
+      Future<void> spend(int amount, DateTime at) => repo.addTransaction(
+        kind: TxKind.expense,
+        amount: amount,
+        occurredAt: at,
+        walletFromId: wallet,
+        categoryId: food,
+      );
+      await spend(400000, DateTime(2026, 9, 4));
+      await spend(30000, DateTime(2026, 9, 11, 9));
+
+      final b = (await repo.watchBudgets(202609, now: today).first).single;
+      expect(b.spentToday, 30000);
+      expect(b.unusedBeforeToday, 600000);
+      expect(b.reserved, 3000000 - 430000 - 600000);
+      expect(b.budgetForToday(30000), 100000);
+    });
+
+    test('tháng khác thì không nhả tiền dư', () async {
+      await repo.setBudget(categoryId: food, limitAmount: 3000000);
+      final b =
+          (await repo.watchBudgets(202608, now: DateTime(2026, 9, 11)).first)
+              .single;
+      expect(b.spentToday, isNull);
+      expect(b.reserved, b.remaining);
     });
 
     test('mốc hôm nay đi theo ngày truyền vào chứ không đứng yên', () async {

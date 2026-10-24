@@ -11,6 +11,7 @@ BudgetProgress budget({
   String name = 'Ăn uống',
   required int limit,
   required int spent,
+  int? spentToday,
 }) {
   return BudgetProgress(
     budgetId: id,
@@ -22,6 +23,7 @@ BudgetProgress budget({
     monthKey: 202609,
     daysInMonth: 30,
     daysElapsed: 10,
+    spentToday: spentToday,
   );
 }
 
@@ -55,6 +57,24 @@ DebtSummary debt(int net) => DebtSummary(
 
 void main() {
   group('tiền tự do', () {
+    test('tiền ngân sách những ngày trước tiêu không hết thành tiền tự do', () {
+      // Hạn mức 3tr = 100k/ngày, hôm nay ngày 10. 9 ngày trước chỉ tiêu 600k
+      // thay vì 900k: dư 300k.
+      final b = budget(limit: 3000000, spent: 600000, spentToday: 0);
+      final m = money(spendable: 4000000, budgets: [b]);
+      expect(m.reserved, 2100000);
+      expect(m.free, 1900000, reason: '300k dư cộng vào tiền tự do');
+    });
+
+    test('chi vượt phần còn giữ thì lấy từ tiền tự do', () {
+      final b = budget(limit: 3000000, spent: 600000, spentToday: 0);
+      final m = money(spendable: 4000000, budgets: [b]);
+      final i = m.preview(amount: 2200000, budget: b);
+      expect(i.fromBudget, 2100000);
+      expect(i.fromFree, 100000);
+      expect(i.budgetLeftAfter, -100000);
+    });
+
     test('đúng ví dụ: có 4tr, tiền ăn còn 2tr thì tự do 2tr', () {
       final m = money(
         spendable: 4000000,

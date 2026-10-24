@@ -10,6 +10,10 @@ typedef Reserve = ({String name, int amount});
 /// đâu cũng được mà không đụng tới tiền ăn. Hết phần đó mà vẫn tiêu tiếp thì
 /// khoản chi ấy đang lấy tiền ăn của những ngày sau.
 ///
+/// Ngân sách chỉ giữ phần tiền cho hôm nay và những ngày sau theo nhịp đều
+/// ([BudgetProgress.reserved]): ngày nào tiêu không hết thì qua nửa đêm phần
+/// dư thành tiền tự do, sau khi đã lấp xong chỗ hụt của những ngày tiêu lố.
+///
 /// Nợ phải trả bị trừ ra vì tiền mượn nằm trong ví nhưng không phải của mình.
 /// Nhờ vậy vay hay trả nợ đều không làm con số này nhảy: tiền và nợ cùng tăng
 /// hoặc cùng giảm.
@@ -34,7 +38,7 @@ class FreeMoney {
       spendable: spendable,
       reserves: [
         for (final b in budgets)
-          if (b.remaining > 0) (name: b.categoryName, amount: b.remaining),
+          if (b.reserved > 0) (name: b.categoryName, amount: b.reserved),
       ],
       owed: debts
           .where((d) => d.iOweThem)
@@ -47,7 +51,7 @@ class FreeMoney {
   /// Tiền tiêu được, đã trừ tiền quỹ.
   final int spendable;
 
-  /// Phần còn lại của từng hạn mức, giữ lại cho tới hết tháng.
+  /// Phần từng hạn mức còn giữ cho hôm nay và những ngày sau.
   final List<Reserve> reserves;
 
   /// Tổng nợ mình đang phải trả người khác.
@@ -99,7 +103,7 @@ class FreeMoney {
   }) {
     final room = budget == null
         ? 0
-        : (budget.remaining > 0 ? budget.remaining : 0);
+        : (budget.reserved > 0 ? budget.reserved : 0);
     final fromBudget = amount < room ? amount : room;
     final overflow = amount - fromBudget + outside;
     final freeNow = free > 0 ? free : 0;
@@ -108,7 +112,7 @@ class FreeMoney {
     return SpendImpact(
       budgetName: budget?.categoryName,
       fromBudget: fromBudget,
-      budgetLeftAfter: budget == null ? null : budget.remaining - amount,
+      budgetLeftAfter: budget == null ? null : budget.reserved - amount,
       fromFree: fromFree,
       fromReserve: overflow - fromFree,
       freeAfter: free - overflow,
@@ -135,7 +139,8 @@ class SpendImpact {
   /// Phần nằm gọn trong hạn mức của chính danh mục.
   final int fromBudget;
 
-  /// Hạn mức danh mục còn bao nhiêu sau khoản này. Âm là vượt.
+  /// Phần hạn mức danh mục còn giữ ([BudgetProgress.reserved]) sau khoản này.
+  /// Âm là đã lấn sang tiền tự do.
   final int? budgetLeftAfter;
 
   /// Phần lấy từ tiền tự do.

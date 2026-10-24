@@ -99,8 +99,8 @@ class SpendImpactNote extends ConsumerWidget {
     if (i.fromFree > 0) {
       final after = 'Còn ${formatVnd(i.freeAfter)} tự do tới hết tháng.';
       final budgetOver = (i.budgetLeftAfter ?? 0) < 0
-          ? 'Vượt hạn mức ${i.budgetName} ${formatVnd(-i.budgetLeftAfter!)}, '
-                'phần vượt '
+          ? 'Quá phần còn giữ cho ${i.budgetName} '
+                '${formatVnd(-i.budgetLeftAfter!)}, phần quá '
           : '';
       final source =
           '$inBudget$budgetOver'

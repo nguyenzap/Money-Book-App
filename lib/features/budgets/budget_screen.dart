@@ -51,6 +51,15 @@ class BudgetScreen extends ConsumerWidget {
           final totalLimit =
               list.fold<int>(0, (sum, b) => sum + b.limitAmount);
           final totalSpent = list.fold<int>(0, (sum, b) => sum + b.spent);
+          final totalReserved = list.fold<int>(
+            0,
+            (sum, b) => sum + (b.reserved > 0 ? b.reserved : 0),
+          );
+          final totalAfterToday = list.fold<int>(
+            0,
+            (sum, b) =>
+                sum + (b.spendableAfterToday > 0 ? b.spendableAfterToday : 0),
+          );
 
           return ListView(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
@@ -60,6 +69,8 @@ class BudgetScreen extends ConsumerWidget {
               _OverallCard(
                 limit: totalLimit,
                 spent: totalSpent,
+                reserved: totalReserved,
+                afterToday: totalAfterToday,
                 monthKey: monthKey,
                 cash: cash,
               ),
@@ -130,12 +141,21 @@ class _OverallCard extends StatelessWidget {
   const _OverallCard({
     required this.limit,
     required this.spent,
+    required this.reserved,
+    required this.afterToday,
     required this.monthKey,
     this.cash,
   });
 
   final int limit;
   final int spent;
+
+  /// Tổng phần các hạn mức còn giữ. Cộng từ từng mục chứ không tính lại trên
+  /// tổng, vì mục tiêu dư không bù được cho mục tiêu lố.
+  final int reserved;
+
+  /// Tổng phần để dành cho những ngày sau hôm nay, đã chặn bằng tiền thật.
+  final int afterToday;
   final int monthKey;
 
   /// Tiền tiêu được trong ví, null nếu không xét (tháng đã qua).
@@ -148,6 +168,9 @@ class _OverallCard extends StatelessWidget {
     final over = spent > limit;
 
     // Gộp mọi hạn mức lại thành một tiến độ chung để nói về nhịp tổng thể.
+    // Chặn bằng tổng phần để dành của từng mục để mức mỗi ngày khớp các mục:
+    // tiền dư đã sang tiền tự do, và từng mục đã được chặn bằng tiền thật.
+    final limitedByCash = cash != null && reserved > 0 && cash! < reserved;
     final overall = BudgetProgress(
       budgetId: -1,
       categoryId: -1,
@@ -158,7 +181,7 @@ class _OverallCard extends StatelessWidget {
       monthKey: monthKey,
       daysInMonth: daysInMonth(monthKey),
       daysElapsed: daysElapsedIn(monthKey),
-    ).withCashCap(cash);
+    ).withCashCap(afterToday);
 
     return Card(
       color: scheme.surfaceContainerHigh,
@@ -232,12 +255,12 @@ class _OverallCard extends StatelessWidget {
                   _PaceBadge(pace: overall.pace),
                 ],
               ),
-              if (overall.isLimitedByCash) ...[
+              if (limitedByCash) ...[
                 const SizedBox(height: 10),
                 Text(
-                  'Ví chỉ còn ${formatVnd(overall.spendable)} tiêu được, ít '
-                  'hơn ${formatVnd(overall.remaining)} còn lại của các hạn '
-                  'mức. Mức mỗi ngày ở trên đã tính theo tiền thật.',
+                  'Ví chỉ còn ${formatVnd(cash!)} tiêu được, ít '
+                  'hơn ${formatVnd(reserved)} các hạn mức còn giữ. Mức mỗi '
+                  'ngày ở trên đã tính theo tiền thật.',
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w500,
@@ -501,8 +524,8 @@ class CashLimitNote extends StatelessWidget {
         Expanded(
           child: Text(
             'Tiền trong ví chỉ còn đủ ${formatVnd(progress.spendable)} cho '
-            'mục này, ít hơn ${formatVnd(progress.remaining)} còn lại của hạn '
-            'mức — phần chênh đã tiêu sang khoản khác.',
+            'mục này, ít hơn ${formatVnd(progress.reserved)} hạn mức còn '
+            'giữ — phần chênh đã tiêu sang khoản khác.',
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w500,

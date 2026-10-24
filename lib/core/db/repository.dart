@@ -1303,6 +1303,8 @@ class Repository {
   /// [now] là mốc "hôm nay" để tính số ngày đã qua; truyền vào để nơi gọi đổi
   /// được mốc khi qua nửa đêm mà không cần đợi dữ liệu thay đổi.
   Stream<List<BudgetProgress>> watchBudgets(int monthKey, {DateTime? now}) {
+    final today = now ?? DateTime.now();
+    final isCurrentMonth = monthKeyOf(today) == monthKey;
     return db
         .customSelect(
           '''
@@ -1319,14 +1321,25 @@ class Repository {
                  AND t.kind = 'expense'
                  AND t.month_key = ?
                  AND t.deleted_at IS NULL
-             ), 0) AS spent
+             ), 0) AS spent,
+             COALESCE((
+               SELECT SUM(t.amount) FROM transactions t
+               WHERE t.category_id = c.id
+                 AND t.kind = 'expense'
+                 AND t.day_key = ?
+                 AND t.deleted_at IS NULL
+             ), 0) AS spent_today
       FROM budgets b
       JOIN categories c ON c.id = b.category_id
       WHERE (b.month_key IS NULL OR b.month_key = ?)
         AND c.is_archived = 0
       ORDER BY c.sort_order, c.id
       ''',
-          variables: [Variable.withInt(monthKey), Variable.withInt(monthKey)],
+          variables: [
+            Variable.withInt(monthKey),
+            Variable.withInt(dayKeyOf(today)),
+            Variable.withInt(monthKey),
+          ],
           readsFrom: {db.budgets, db.categories, db.transactions},
         )
         .watch()
@@ -1345,6 +1358,11 @@ class Repository {
                   iconKey: row.read<String?>('category_icon'),
                   limitAmount: row.read<int>('limit_amount'),
                   spent: row.read<int>('spent'),
+                  // Tháng khác tháng này thì không có "hôm nay", nên cũng
+                  // không có tiền dư nào được nhả ra tiền tự do.
+                  spentToday: isCurrentMonth
+                      ? row.read<int>('spent_today')
+                      : null,
                   isRecurring: row.read<int?>('budget_month') == null,
                   monthKey: monthKey,
                   daysInMonth: totalDays,
@@ -1511,6 +1529,7 @@ class BudgetProgress {
     this.colorValue,
     this.iconKey,
     this.cashCap,
+    this.spentToday,
   });
 
   final int budgetId;
@@ -1518,6 +1537,10 @@ class BudgetProgress {
   final String categoryName;
   final int limitAmount;
   final int spent;
+
+  /// Hôm nay đã chi bao nhiêu vào mục này, null nếu tháng này không chứa
+  /// hôm nay (tháng đã qua hoặc chưa tới).
+  final int? spentToday;
 
   /// Hạn mức áp dụng cho mọi tháng, không riêng tháng nào.
   final bool isRecurring;
@@ -1548,22 +1571,37 @@ class BudgetProgress {
     colorValue: colorValue,
     iconKey: iconKey,
     cashCap: cap,
+    spentToday: spentToday,
   );
 
   int get remaining => limitAmount - spent;
 
-  /// Số thực sự còn tiêu được: phần còn lại của hạn mức, nhưng không quá số
-  /// tiền đang có. Hạn mức chỉ là lời hứa với bản thân, còn tiền hết là hết —
+  /// Tiền những ngày trước tiêu không hết so với nhịp đều — đã nhả ra thành
+  /// tiền tự do, không còn giữ cho hạn mức này nữa.
+  ///
+  /// Tính dồn cả tháng chứ không từng ngày: những ngày trước lỡ tiêu lố thì
+  /// phần tiết kiệm sau đó lấp cái hụt ấy trước, lấp đủ rồi mới nhả ra.
+  int get unusedBeforeToday {
+    if (spentToday == null || daysElapsed == 0) return 0;
+    final unused = -overspentBeforeToday(spentToday!);
+    return unused > 0 ? unused : 0;
+  }
+
+  /// Phần hạn mức còn giữ lại cho hôm nay và những ngày sau.
+  int get reserved => remaining - unusedBeforeToday;
+
+  /// Số thực sự còn tiêu được: phần hạn mức còn giữ, nhưng không quá số tiền
+  /// đang có. Hạn mức chỉ là lời hứa với bản thân, còn tiền hết là hết —
   /// tiêu lố ở danh mục khác thì ví vơi đi dù hạn mức này chưa hề đụng tới.
   int get spendable {
     final cap = cashCap;
-    if (cap == null || cap >= remaining) return remaining;
+    if (cap == null || cap >= reserved) return reserved;
     return cap < 0 ? 0 : cap;
   }
 
-  /// Tiền trong ví đã ít hơn phần còn lại của hạn mức.
+  /// Tiền trong ví đã ít hơn phần hạn mức còn giữ.
   bool get isLimitedByCash =>
-      cashCap != null && remaining > 0 && cashCap! < remaining;
+      cashCap != null && reserved > 0 && cashCap! < reserved;
   double get ratio => limitAmount == 0 ? 0 : spent / limitAmount;
   bool get isOver => spent > limitAmount;
 
@@ -1594,6 +1632,11 @@ class BudgetProgress {
   int get paceDelta => spent - expectedByNow;
 
   /// Mức nên tiêu trong HÔM NAY.
+  ///
+  /// Chia [spendable] chứ không chia [remaining]: tiền những ngày trước tiêu
+  /// không hết đã sang tiền tự do ([unusedBeforeToday]), nên tiết kiệm hôm qua
+  /// không đẩy mốc hôm nay lên quá nhịp đều. Ngược lại, tiêu lố thì mốc tự hạ
+  /// để cả tháng vẫn đủ.
   ///
   /// Phải cộng lại phần đã tiêu hôm nay rồi mới chia, vì [remaining] đã trừ nó
   /// đi rồi còn [daysRemaining] lại không đếm hôm nay — lấy tiền của những ngày
@@ -1632,8 +1675,19 @@ class BudgetProgress {
   /// xuống bao nhiêu để cả tháng vẫn nằm trong hạn mức.
   int get remainingDailyAllowance {
     if (daysRemaining <= 0) return 0;
-    if (spendable <= 0) return 0;
-    return spendable ~/ daysRemaining;
+    final left = spendableAfterToday;
+    if (left <= 0) return 0;
+    return left ~/ daysRemaining;
+  }
+
+  /// Phần để dành cho những ngày sau hôm nay. Phần hôm nay chưa tiêu hết
+  /// không tính vào: qua nửa đêm nó thành tiền tự do chứ không chia cho ngày
+  /// sau. Không biết số đã tiêu hôm nay thì trả về [spendable] như trước.
+  int get spendableAfterToday {
+    final today = spentToday;
+    if (today == null) return spendable;
+    final leftToday = leftForToday(today);
+    return leftToday > 0 ? spendable - leftToday : spendable;
   }
 
   /// Những ngày TRƯỚC hôm nay đã tiêu vượt nhịp đều bao nhiêu. Âm là đang dư.
@@ -1647,6 +1701,54 @@ class BudgetProgress {
     final before = spent - spentToday;
     final expected = (limitAmount * (daysElapsed - 1)) ~/ daysInMonth;
     return before - expected;
+  }
+
+  // ----- Gợi ý lấp chỗ hụt -----------------------------------------------
+  //
+  // Chỉ là lời khuyên để về lại nhịp đều sớm hơn, không phải mốc bắt buộc:
+  // tiêu quá gợi ý mà vẫn dưới [budgetForToday] thì không bị coi là lố.
+
+  /// Phần của hôm nay nếu chia đều hạn mức cả tháng, tính theo tỉ lệ để tổng
+  /// các ngày khớp đúng hạn mức.
+  int get normalToday {
+    if (daysInMonth == 0 || daysElapsed == 0) return 0;
+    return (limitAmount * daysElapsed) ~/ daysInMonth -
+        (limitAmount * (daysElapsed - 1)) ~/ daysInMonth;
+  }
+
+  /// Những ngày trước tiêu quá nhịp đều bao nhiêu, chưa lấp lại được.
+  int get hole {
+    if (spentToday == null) return 0;
+    final h = overspentBeforeToday(spentToday!);
+    return h > 0 ? h : 0;
+  }
+
+  /// Gợi ý mỗi ngày bớt bao nhiêu để lấp [hole]: một phần cố định của mức
+  /// thường ngày, nên chỗ hụt nhỏ vài ngày là lấp xong, chỗ hụt lớn thì lâu
+  /// hơn. Không bao giờ ít hơn mức chia đều tới cuối tháng, để kịp lấp trong
+  /// tháng; không bao giờ quá chính chỗ hụt.
+  int get recoveryCut {
+    final h = hole;
+    if (h == 0) return 0;
+    final daysLeft = daysRemaining + 1;
+    final byPercent = (normalToday * kRecoveryCut).ceil();
+    final bySpread = (h + daysLeft - 1) ~/ daysLeft;
+    final cut = byPercent > bySpread ? byPercent : bySpread;
+    return cut < h ? cut : h;
+  }
+
+  /// Gợi ý tiêu tối đa mỗi ngày trong lúc lấp chỗ hụt.
+  int get recoveryLimit {
+    final limit = normalToday - recoveryCut;
+    return limit > 0 ? limit : 0;
+  }
+
+  /// Bớt đúng [recoveryCut] mỗi ngày thì sau chừng này ngày về lại mức
+  /// [normalToday]. 0 nếu không hụt.
+  int get daysToRecover {
+    final cut = recoveryCut;
+    if (cut == 0) return 0;
+    return (hole + cut - 1) ~/ cut;
   }
 
   /// Cứ giữ nhịp này thì hết tháng sẽ tiêu hết bao nhiêu.
@@ -1695,6 +1797,10 @@ class BudgetProgress {
   }
 }
 
+/// Gợi ý bớt bao nhiêu phần mức thường ngày để lấp chỗ hụt. Xem
+/// [BudgetProgress.recoveryCut].
+const kRecoveryCut = 0.25;
+
 /// Chặn các hạn mức bằng số tiền thật đang có.
 ///
 /// Hạn mức ăn uống còn 300k nhưng ví chỉ còn 190k — vì tiền đã chảy sang những
@@ -1704,7 +1810,7 @@ class BudgetProgress {
 List<BudgetProgress> capBudgetsByCash(List<BudgetProgress> budgets, int cash) {
   final open = budgets.fold<int>(
     0,
-    (sum, b) => sum + (b.remaining > 0 ? b.remaining : 0),
+    (sum, b) => sum + (b.reserved > 0 ? b.reserved : 0),
   );
   if (open <= cash) return budgets;
 
@@ -1712,7 +1818,7 @@ List<BudgetProgress> capBudgetsByCash(List<BudgetProgress> budgets, int cash) {
   return [
     for (final b in budgets)
       b.withCashCap(
-        b.remaining <= 0 ? 0 : (available * (b.remaining / open)).floor(),
+        b.reserved <= 0 ? 0 : (available * (b.reserved / open)).floor(),
       ),
   ];
 }

@@ -94,10 +94,11 @@ class _BudgetTodayRow extends StatelessWidget {
     final color =
         progress.colorValue == null ? null : Color(progress.colorValue!);
 
-    // Mức nên tiêu hôm nay, tính từ tiền còn lại chia cho số ngày còn lại kể
-    // cả hôm nay. Tiêu lố hôm qua thì mốc này tự thấp xuống — đúng thứ cần
-    // biết để tự điều chỉnh. Mốc không đổi theo số đã tiêu trong ngày, nếu
-    // không thì càng tiêu nhiều mốc càng cao và chẳng bao giờ báo vượt.
+    // Mức nên tiêu hôm nay, tính từ phần hạn mức còn giữ chia cho số ngày còn
+    // lại kể cả hôm nay. Tiêu lố hôm qua thì mốc này tự thấp xuống; tiêu dư
+    // thì phần dư sang tiền tự do chứ không đẩy mốc lên. Mốc không đổi theo số
+    // đã tiêu trong ngày, nếu không thì càng tiêu nhiều mốc càng cao và chẳng
+    // bao giờ báo vượt.
     final target = progress.budgetForToday(spentToday);
     final left = progress.leftForToday(spentToday);
     final overToday = left < 0;
@@ -110,6 +111,15 @@ class _BudgetTodayRow extends StatelessWidget {
         !progress.isOver &&
         carriedOver > 0 &&
         target < progress.dailyAllowance;
+    // Gợi ý lấp chỗ hụt chỉ để tham khảo: tiêu quá gợi ý mà chưa quá mốc thì
+    // không bị coi là lố. Ẩn đi khi gợi ý không thấp hơn mốc (ví dụ mốc đã bị
+    // tiền thật chặn xuống) vì lúc đó chẳng còn gì để khuyên.
+    final showRecovery =
+        !progress.isOver &&
+        progress.daysRemaining > 0 &&
+        progress.hole > 0 &&
+        progress.recoveryLimit < target;
+    final released = progress.unusedBeforeToday;
     // Thanh vơi dần chứ không đầy dần: tiền đang hết đi thì thanh phải ngắn
     // lại, nhìn là hiểu ngay mà không cần đọc số.
     final barValue = progress.remainingRatioToday(spentToday);
@@ -179,7 +189,7 @@ class _BudgetTodayRow extends StatelessWidget {
             if (overToday) ...[
               Text(
                 'Hôm nay lố ${formatVnd(-left)}. '
-                'Bớt lại những ngày sau để cả tháng vẫn đủ.',
+                'Những ngày sau mốc sẽ tự hạ để cả tháng vẫn đủ.',
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w500,
@@ -199,6 +209,23 @@ class _BudgetTodayRow extends StatelessWidget {
                 'Những ngày trước tiêu quá ${formatVnd(carriedOver)}, nên mốc '
                 'hôm nay hạ từ ${formatVndShort(progress.dailyAllowance)} '
                 'xuống ${formatVndShort(target)}.',
+                style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
+              ),
+              const SizedBox(height: 4),
+            ],
+            if (showRecovery) ...[
+              Text(
+                'Gợi ý: tiêu tối đa ${formatVndShort(progress.recoveryLimit)}'
+                '/ngày thì khoảng ${progress.daysToRecover} ngày nữa về lại '
+                '${formatVndShort(progress.normalToday)}/ngày.',
+                style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
+              ),
+              const SizedBox(height: 4),
+            ],
+            if (released > 0 && !progress.isOver) ...[
+              Text(
+                'Những ngày trước còn dư ${formatVnd(released)}, đã chuyển '
+                'sang tiền tự do.',
                 style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
               ),
               const SizedBox(height: 4),
@@ -229,7 +256,7 @@ class _BudgetTodayRow extends StatelessWidget {
     final perDay = formatVnd(progress.remainingDailyAllowance);
     // Hết tiền thật trước khi hết hạn mức thì chia theo tiền thật.
     final left =
-        'Còn ${formatVnd(progress.spendable)} cho '
+        'Còn ${formatVnd(progress.spendableAfterToday)} cho '
         '${progress.daysRemaining} ngày · $perDay/ngày';
 
     return switch (progress.pace) {

@@ -7,7 +7,7 @@ trong máy, không server, không tài khoản.
 
 ```powershell
 flutter run -d <device>                 # dev, hot reload bằng phím r
-flutter test                            # 267 test, chạy trong ~2 giây
+flutter test                            # 281 test, chạy trong ~2 giây
 flutter analyze
 dart run build_runner build             # BẮT BUỘC sau khi sửa lib/core/db/tables.dart
 flutter build apk --release --target-platform android-arm64
@@ -122,6 +122,14 @@ mức vẫn báo "còn nhiều" trong khi ví đã cạn. Vì vậy với tháng
 `capBudgetsByCash` (nhiều hạn mức thì chia theo tỉ lệ phần còn lại).
 `remaining` vẫn là số của hạn mức; mọi con số "mỗi ngày được tiêu" dùng
 `spendable`. Tháng đã qua không bị chặn.
+
+Tiền ngân sách tiêu không hết KHÔNG chia lại cho những ngày sau mà thành tiền
+tự do: `BudgetProgress.reserved` = `remaining` − `unusedBeforeToday` (phần
+những ngày trước tiêu dưới nhịp đều, tính dồn cả tháng nên tiết kiệm lấp chỗ
+hụt của ngày lố trước, lấp đủ mới nhả). Cần `spentToday` (lấy trong
+`watchBudgets`, null nếu không phải tháng này — khi đó không nhả gì). Tiêu lố
+thì mốc vẫn tự hạ như cũ; `recoveryLimit` / `daysToRecover` (bớt 25% mức
+thường ngày, `kRecoveryCut`) chỉ là gợi ý, không phải mốc.
 
 Mọi thứ phụ thuộc "hôm nay" phải xem `todayProvider` (tự đổi qua nửa đêm và khi
 app quay lại từ nền), không gọi `DateTime.now()` lúc dựng provider — provider
