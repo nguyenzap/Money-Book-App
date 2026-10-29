@@ -4,7 +4,7 @@ import '../db/repository.dart';
 typedef Reserve = ({String name, int amount});
 
 /// Tiền tự do: phần tiền tiêu được sau khi đã giữ đủ cho các ngân sách tới hết
-/// tháng và trả hết nợ.
+/// tháng.
 ///
 /// Có 4 triệu, hạn mức ăn uống còn 2 triệu thì 2 triệu kia là tự do — tiêu vào
 /// đâu cũng được mà không đụng tới tiền ăn. Hết phần đó mà vẫn tiêu tiếp thì
@@ -14,9 +14,9 @@ typedef Reserve = ({String name, int amount});
 /// ([BudgetProgress.reserved]): ngày nào tiêu không hết thì qua nửa đêm phần
 /// dư thành tiền tự do, sau khi đã lấp xong chỗ hụt của những ngày tiêu lố.
 ///
-/// Nợ phải trả bị trừ ra vì tiền mượn nằm trong ví nhưng không phải của mình.
-/// Nhờ vậy vay hay trả nợ đều không làm con số này nhảy: tiền và nợ cùng tăng
-/// hoặc cùng giảm.
+/// Nợ phải trả đã bị trừ sẵn trong [spendable]
+/// ([Repository.watchSpendableAssets]), không trừ lần nữa ở đây. [owed] chỉ
+/// để hiển thị.
 class FreeMoney {
   const FreeMoney({
     required this.spendable,
@@ -48,13 +48,13 @@ class FreeMoney {
     );
   }
 
-  /// Tiền tiêu được, đã trừ tiền quỹ.
+  /// Tiền tiêu được, đã trừ tiền quỹ và nợ phải trả.
   final int spendable;
 
   /// Phần từng hạn mức còn giữ cho hôm nay và những ngày sau.
   final List<Reserve> reserves;
 
-  /// Tổng nợ mình đang phải trả người khác.
+  /// Tổng nợ mình đang phải trả người khác, đã nằm trong [spendable].
   final int owed;
 
   /// Số ngày còn lại của tháng, không tính hôm nay.
@@ -67,7 +67,7 @@ class FreeMoney {
   int get reserved => reserves.fold<int>(0, (sum, r) => sum + r.amount);
 
   /// Âm nghĩa là tiền trong ví không đủ cho các ngân sách: đang thiếu.
-  int get free => spendable - reserved - owed;
+  int get free => spendable - reserved;
 
   /// Đã hết tiền tự do: mọi khoản chi ngoài ngân sách từ giờ là lấn vào tiền
   /// đã giữ.

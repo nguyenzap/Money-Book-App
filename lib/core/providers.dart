@@ -174,7 +174,13 @@ final totalInFundsProvider = StreamProvider<int>((ref) {
   return ref.watch(repositoryProvider).watchTotalInFunds();
 });
 
-/// Tiền thực sự tiêu được: tổng ví trừ đi phần đã hứa cho các quỹ.
+/// Tổng nợ mình đang phải trả người khác.
+final totalOwedProvider = StreamProvider<int>((ref) {
+  return ref.watch(repositoryProvider).watchTotalOwed();
+});
+
+/// Tiền thực sự tiêu được: tổng ví trừ đi phần đã hứa cho các quỹ và nợ phải
+/// trả.
 final spendableAssetsProvider = StreamProvider<int>((ref) {
   return ref.watch(repositoryProvider).watchSpendableAssets();
 });

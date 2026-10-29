@@ -376,11 +376,35 @@ class Repository {
         .map((row) => row.read<int>('total'));
   }
 
-  /// Tiền thực sự tiêu được: tổng ví trừ đi phần đã hứa cho các quỹ.
+  /// Tổng nợ mình đang phải trả, cộng theo từng người.
+  ///
+  /// Cộng theo người chứ không cộng thẳng mọi debt_delta âm: người khác nợ
+  /// mình không được bù vào phần mình nợ người khác.
+  Stream<int> watchTotalOwed() {
+    const sql = '''
+      SELECT COALESCE(SUM(-net), 0) AS total FROM (
+        SELECT SUM(debt_delta) AS net FROM transactions
+        WHERE deleted_at IS NULL AND person_id IS NOT NULL
+        GROUP BY person_id
+      ) WHERE net < 0
+    ''';
+    return db
+        .customSelect(sql, readsFrom: {db.transactions})
+        .watchSingle()
+        .map((row) => row.read<int>('total'));
+  }
+
+  /// Tiền thực sự tiêu được: tổng ví trừ đi phần đã hứa cho các quỹ và nợ
+  /// mình phải trả.
+  ///
+  /// Tiền mượn nằm trong ví nhưng không phải của mình, nên vay hay trả nợ đều
+  /// không làm con số này nhảy. Người khác nợ mình thì không cộng vào: tiền
+  /// đó chưa về tay. Âm nghĩa là có trong tay không đủ trả nợ.
   Stream<int> watchSpendableAssets() {
     return watchTotalAssets().asyncMap((total) async {
       final funds = await watchTotalInFunds().first;
-      return total - funds;
+      final owed = await watchTotalOwed().first;
+      return total - funds - owed;
     });
   }
 

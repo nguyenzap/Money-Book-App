@@ -13,8 +13,8 @@ import '../budgets/budget_screen.dart';
 /// - Nên tiêu bao nhiêu hôm nay? (mốc chia đều tới hết tháng)
 /// - Khi nào phải nhịn? (hết tiền tự do thì thẻ chuyển đỏ và nói thẳng)
 ///
-/// Thanh bên dưới chia số tiền đang có thành từng phần — giữ cho ngân sách, nợ
-/// phải trả, tự do — để thấy ngay 4 triệu trong ví không phải 4 triệu tiêu
+/// Thanh bên dưới chia số tiền đang có thành từng phần — nợ phải trả, giữ cho
+/// ngân sách, tự do — để thấy ngay 4 triệu trong ví không phải 4 triệu tiêu
 /// thoải mái.
 class FreeMoneySection extends ConsumerWidget {
   const FreeMoneySection({super.key});
@@ -134,7 +134,7 @@ class FreeMoneySection extends ConsumerWidget {
   }
 }
 
-/// Thanh chia tiền đang có thành: giữ cho ngân sách | nợ | tự do.
+/// Thanh chia tiền đang có thành: nợ | giữ cho ngân sách | tự do.
 ///
 /// Một tông màu, đậm nhất là phần tự do vì đó là phần được tiêu; phần đã giữ
 /// nhạt hơn, nợ màu xám. Nhãn chữ ở chú thích bên dưới mang danh tính, màu chỉ
@@ -184,7 +184,9 @@ class _CompositionBar extends StatelessWidget {
 /// Các phần của thanh, theo thứ tự trái sang phải. Chỉ gồm phần lớn hơn 0.
 ///
 /// Khi ví không đủ, các phần giữ chỗ bị co lại cho vừa số tiền đang có — thanh
-/// luôn biểu diễn đúng số tiền thật trong ví.
+/// luôn biểu diễn đúng số tiền thật trong ví. Vì vậy bắt đầu từ tiền trong ví
+/// ([FreeMoney.spendable] cộng lại nợ), và nợ được lấy ra trước như cách
+/// [FreeMoney.spendable] đã trừ.
 List<({String label, int amount, Color color})> _parts(
   FreeMoney m,
   ColorScheme scheme,
@@ -193,7 +195,8 @@ List<({String label, int amount, Color color})> _parts(
   final owedColor = scheme.outline;
   final freeColor = scheme.primary;
 
-  var cash = m.spendable > 0 ? m.spendable : 0;
+  final inWallet = m.spendable + m.owed;
+  var cash = inWallet > 0 ? inWallet : 0;
   final result = <({String label, int amount, Color color})>[];
   void take(String label, int want, Color color) {
     final got = want < cash ? want : cash;
@@ -201,8 +204,8 @@ List<({String label, int amount, Color color})> _parts(
     cash -= got;
   }
 
-  take('Giữ cho ngân sách', m.reserved, reserveColor);
   take('Nợ phải trả', m.owed, owedColor);
+  take('Giữ cho ngân sách', m.reserved, reserveColor);
   take('Tự do', cash, freeColor);
   return result;
 }
@@ -328,10 +331,13 @@ void showFreeMoneyBreakdown(BuildContext context, FreeMoney m) {
                 ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 12),
-              row('Tiền tiêu được', m.spendable),
+              if (m.owed > 0) ...[
+                row('Tiền trong ví, trừ quỹ', m.spendable + m.owed),
+                row('− Nợ phải trả', m.owed),
+              ],
+              row('Tiền tiêu được', m.spendable, bold: m.owed > 0),
               for (final r in m.reserves)
                 row('− Giữ cho ${r.name} tới hết tháng', r.amount),
-              if (m.owed > 0) row('− Nợ phải trả', m.owed),
               const Divider(height: 20),
               row(
                 'Tiền tự do',

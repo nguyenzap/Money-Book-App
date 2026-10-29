@@ -65,7 +65,8 @@ class DashboardScreen extends ConsumerWidget {
   }
 }
 
-/// Tổng tài sản, mặc định chỉ tính phần thực sự tiêu được.
+/// Tổng tài sản, mặc định chỉ tính phần thực sự tiêu được (đã trừ quỹ và nợ
+/// phải trả).
 ///
 /// Tiền quỹ đã có chỗ đến rồi nên gộp vào đây dễ làm mình tưởng còn nhiều tiền
 /// hơn thực tế. Bấm con mắt thì mới hiện thêm phần quỹ.
@@ -76,11 +77,15 @@ class _TotalAssetsCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final spendable = ref.watch(spendableAssetsProvider);
     final inFunds = ref.watch(totalInFundsProvider).valueOrNull ?? 0;
+    final owed = ref.watch(totalOwedProvider).valueOrNull ?? 0;
     final showFunds = ref.watch(showFundsInTotalProvider);
     final scheme = Theme.of(context).colorScheme;
 
     final value = spendable.valueOrNull;
-    final shown = value == null ? null : (showFunds ? value + inFunds : value);
+    // Tổng tài sản là tiền thật trong ví nên cộng lại cả phần nợ đã trừ.
+    final shown = value == null
+        ? null
+        : (showFunds ? value + inFunds + owed : value);
 
     return Card(
       color: scheme.primaryContainer,
@@ -137,6 +142,16 @@ class _TotalAssetsCard extends ConsumerWidget {
                     fontFeatures: const [FontFeature.tabularFigures()],
                   ),
                 ),
+              if (owed > 0 && !(showFunds && inFunds > 0)) ...[
+                const SizedBox(height: 8),
+                Text(
+                  'Đã trừ ${formatVnd(owed)} nợ phải trả',
+                  style: TextStyle(
+                    color: scheme.onPrimaryContainer.withValues(alpha: 0.75),
+                    fontSize: 12.5,
+                  ),
+                ),
+              ],
               // Khi mắt nhắm thì không hé lộ phần để dành — chỉ con số tiêu
               // được. Muốn biết thì bấm con mắt.
               if (inFunds > 0 && showFunds) ...[

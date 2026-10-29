@@ -114,17 +114,10 @@ void main() {
       expect(m.perDayAfterToday, 0);
     });
 
-    test('nợ phải trả bị trừ, người khác nợ mình thì không cộng', () {
-      final m = money(spendable: 1000000, debts: [debt(-200000), debt(300000)]);
+    test('nợ đã trừ sẵn trong tiền tiêu được, không trừ lần nữa', () {
+      final m = money(spendable: 800000, debts: [debt(-200000), debt(300000)]);
       expect(m.owed, 200000);
       expect(m.free, 800000);
-    });
-
-    test('đi vay không làm tiền tự do phồng lên', () {
-      final before = money(spendable: 1000000);
-      // Mượn 500k: ví tăng 500k, nợ phải trả cũng tăng 500k.
-      final after = money(spendable: 1500000, debts: [debt(-500000)]);
-      expect(after.free, before.free);
     });
   });
 
@@ -264,6 +257,38 @@ void main() {
           .watchSpentOutsideBudgetsOnDay(20260910, 202609)
           .first;
       expect(total, 200000);
+    });
+
+    test('tiền tiêu được trừ nợ phải trả, không cộng tiền người khác nợ', () async {
+      final duc = await repo.insertPerson(
+        PeopleCompanion.insert(name: 'Đức', createdAt: 0, updatedAt: 0),
+      );
+      // Mượn Đức 500k: ví 5.5tr nhưng 500k không phải của mình.
+      await repo.addTransaction(
+        kind: TxKind.borrow,
+        amount: 500000,
+        occurredAt: DateTime(2026, 9, 10, 12),
+        walletToId: wallet,
+        personId: duc,
+      );
+      expect(await repo.watchTotalOwed().first, 500000);
+      expect(await repo.watchSpendableAssets().first, 5000000);
+
+      // Nam nợ mình 300k: ví giảm, nhưng không bù được vào nợ Đức.
+      await tx(TxKind.lend, 300000, person: nam);
+      expect(await repo.watchTotalOwed().first, 500000);
+      expect(await repo.watchSpendableAssets().first, 4700000);
+
+      // Trả Đức 200k: ví và nợ cùng giảm, tiền tiêu được đứng yên.
+      await repo.addTransaction(
+        kind: TxKind.repay,
+        amount: 200000,
+        occurredAt: DateTime(2026, 9, 10, 13),
+        walletFromId: wallet,
+        personId: duc,
+      );
+      expect(await repo.watchTotalOwed().first, 300000);
+      expect(await repo.watchSpendableAssets().first, 4700000);
     });
 
     test('ngày khác không lẫn vào', () async {

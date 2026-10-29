@@ -138,8 +138,11 @@ không bị dựng lại nên app để nền qua đêm sẽ tính theo ngày h�
 ## Tiền tự do
 
 `lib/core/domain/free_money.dart`. Tiền tự do = tiền tiêu được − phần hạn mức
-còn lại của mọi ngân sách tháng này − nợ mình phải trả. Trừ nợ để vay/trả nợ
-không làm con số nhảy (tiền và nợ đi cùng nhau). Mốc hôm nay chia đều tới hết
+còn lại của mọi ngân sách tháng này. Nợ mình phải trả đã trừ sẵn trong tiền
+tiêu được (`watchSpendableAssets` = ví − quỹ − `watchTotalOwed`, cộng nợ theo
+từng người, người khác nợ mình không bù vào), nên `FreeMoney.owed` chỉ để hiển
+thị — trừ lần nữa là đếm nợ hai lần. Trừ nợ để vay/trả nợ không làm con số
+nhảy (tiền và nợ đi cùng nhau). Mốc hôm nay chia đều tới hết
 tháng, cùng cách với ngân sách từng mục (cộng lại phần đã tiêu hôm nay rồi mới
 chia). "Đã tiêu tự do hôm nay" = chi vào mục không có hạn mức + cho mượn, không
 tính chi từ quỹ (`watchSpentOutsideBudgetsOnDay`).
@@ -165,7 +168,8 @@ có hai chân trùng nhau — vế vào và vế ra triệt tiêu, không còn b
 đó `addTransaction(intoFund: ...)` quyết định; sửa giao dịch thì giữ chiều cũ;
 nhập sao lưu tính lại từ chân ví và chỉ lấy dấu trong file cho trường hợp này.
 
-Tiền quỹ trừ khỏi `watchSpendableAssets` nhưng vẫn trong `watchTotalAssets`.
+Tiền quỹ và nợ phải trả trừ khỏi `watchSpendableAssets` nhưng vẫn trong
+`watchTotalAssets`.
 
 ## Mẫu chi tiêu
 
