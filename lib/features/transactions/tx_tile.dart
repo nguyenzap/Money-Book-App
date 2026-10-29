@@ -33,6 +33,7 @@ class TxTile extends StatelessWidget {
       subtitle: Text(
         [
           if (view.subtitle.isNotEmpty) view.subtitle,
+          if (view.hasBill) '${view.billCount} món',
           formatTime(DateTime.fromMillisecondsSinceEpoch(view.tx.occurredAt)),
         ].join(' · '),
         maxLines: 1,

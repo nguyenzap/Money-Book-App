@@ -189,6 +189,28 @@ class Transactions extends Table {
   IntColumn get deletedAt => integer().nullable()();
 }
 
+/// Hoá đơn chi tiết của một khoản chi: mỗi dòng là một món đã mua.
+///
+/// Có hoá đơn thì [Transactions.amount] chính là tổng hoá đơn
+/// (`billTotal`), tính lúc ghi. Món không đổi thống kê hay ngân sách: chúng
+/// vẫn chỉ thấy một khoản chi của danh mục đó.
+///
+/// Xoá mềm giao dịch thì các dòng vẫn nằm đó để hoàn tác; xoá hẳn thì khoá
+/// ngoại `ON DELETE CASCADE` dọn theo.
+class BillItems extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  IntColumn get transactionId =>
+      integer().references(Transactions, #id, onDelete: KeyAction.cascade)();
+  TextColumn get name => text()();
+  IntColumn get quantity => integer().withDefault(const Constant(1))();
+
+  /// Đơn giá, LUÔN dương. Dòng giảm giá đánh dấu bằng [isDiscount], giống
+  /// cách [Transactions.amount] để dấu cho kind.
+  IntColumn get unitPrice => integer()();
+  BoolColumn get isDiscount => boolean().withDefault(const Constant(false))();
+  IntColumn get sortOrder => integer().withDefault(const Constant(0))();
+}
+
 /// Hạn mức chi tiêu theo danh mục.
 class Budgets extends Table {
   IntColumn get id => integer().autoIncrement()();

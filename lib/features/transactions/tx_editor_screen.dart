@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/db/repository.dart';
+import '../../core/domain/bill.dart';
 import '../../core/domain/tx_kind.dart';
 import '../../core/format/dates.dart';
 import '../../core/format/money.dart';
@@ -10,6 +11,7 @@ import '../../core/providers.dart';
 import '../../core/widgets.dart';
 import '../categories/category_edit_screen.dart';
 import '../people/person_edit_screen.dart';
+import 'bill_section.dart';
 import 'spend_impact_note.dart';
 import 'split_bill_section.dart';
 
@@ -81,10 +83,23 @@ class _TxEditorScreenState extends ConsumerState<TxEditorScreen> {
   /// giao dịch đã có thì không đụng tới cả nhóm.
   final _split = SplitState();
 
+  /// Hoá đơn chi tiết. Bật lên thì số tiền là tổng hoá đơn.
+  final _bill = BillState();
+
   bool get _isEditing => widget.editing != null;
 
-  /// Có được chia tiền ở trạng thái hiện tại không.
-  bool get _canSplit => !_isEditing && _kind == TxKind.expense;
+  /// Có được chia tiền ở trạng thái hiện tại không. Trả dùm và hoá đơn chi
+  /// tiết không đi cùng nhau: trả dùm tách hoá đơn thành nhiều giao dịch.
+  bool get _canSplit =>
+      !_isEditing && _kind == TxKind.expense && !_bill.enabled;
+
+  bool get _canBill => _kind == TxKind.expense && !_split.enabled;
+
+  bool get _usesBill => _canBill && _bill.enabled;
+
+  /// Số tiền sẽ ghi: tổng hoá đơn nếu đang dùng hoá đơn, không thì số gõ tay.
+  int get _amount =>
+      _usesBill ? _bill.total : parseVnd(_amountController.text);
 
   @override
   void initState() {
@@ -101,6 +116,7 @@ class _TxEditorScreenState extends ConsumerState<TxEditorScreen> {
       _fundId = editing.tx.fundId;
       _occurredAt =
           DateTime.fromMillisecondsSinceEpoch(editing.tx.occurredAt);
+      if (editing.hasBill) _loadBill(editing.tx.id);
     } else if (widget.fromTemplate != null) {
       final t = widget.fromTemplate!;
       _kind = TxKind.expense;
@@ -117,9 +133,18 @@ class _TxEditorScreenState extends ConsumerState<TxEditorScreen> {
     }
   }
 
+  Future<void> _loadBill(int txId) async {
+    final items = await ref.read(repositoryProvider).watchBill(txId).first;
+    if (!mounted) return;
+    setState(() => _bill.load(items));
+  }
+
   /// Có lưu được các trường đang nhập thành mẫu chi tiêu không.
   bool get _canSaveAsTemplate =>
-      !_isEditing && _kind == TxKind.expense && !_split.enabled;
+      !_isEditing &&
+      _kind == TxKind.expense &&
+      !_split.enabled &&
+      !_bill.enabled;
 
   /// Lưu các trường đang nhập thành một mẫu, để lần sau ghi một chạm. Không
   /// đóng màn hình — người dùng vẫn ghi khoản này như thường.
@@ -160,6 +185,7 @@ class _TxEditorScreenState extends ConsumerState<TxEditorScreen> {
     _amountController.dispose();
     _noteController.dispose();
     _split.dispose();
+    _bill.dispose();
     super.dispose();
   }
 
@@ -262,9 +288,18 @@ class _TxEditorScreenState extends ConsumerState<TxEditorScreen> {
       return;
     }
 
-    final amount = parseVnd(_amountController.text);
+    if (_usesBill) {
+      final billError = validateBill(_bill.lines);
+      if (billError != null) {
+        showSnack(context, billError);
+        return;
+      }
+    }
+
+    final amount = _amount;
     final note = _noteController.text.trim();
     final repo = ref.read(repositoryProvider);
+    final bill = _usesBill ? _bill.lines : const <BillLine>[];
 
     if (_canSplit && _split.enabled) {
       final splitError = _split.validate(amount);
@@ -288,6 +323,7 @@ class _TxEditorScreenState extends ConsumerState<TxEditorScreen> {
         personId: _personId,
         fundId: _fundId,
         note: note.isEmpty ? null : note,
+        bill: bill,
       );
     } else {
       await repo.addTransaction(
@@ -300,6 +336,7 @@ class _TxEditorScreenState extends ConsumerState<TxEditorScreen> {
         personId: _personId,
         fundId: _fundId,
         note: note.isEmpty ? null : note,
+        bill: bill,
       );
     }
 
@@ -382,23 +419,34 @@ class _TxEditorScreenState extends ConsumerState<TxEditorScreen> {
               children: [
                 _KindSelector(selected: _kind, onChanged: _changeKind),
                 const SizedBox(height: 20),
-                AmountField(
-                  controller: _amountController,
-                  autofocus: !_isEditing,
-                  label: _canSplit && _split.enabled
-                      ? 'Tổng hoá đơn'
-                      : 'Số tiền',
-                  // Bảng chia tiền và dòng "khoản này lấy tiền từ đâu" đều phụ
-                  // thuộc vào số tiền nên phải vẽ lại theo từng phím.
-                  onChanged: (_) => setState(() {}),
-                ),
-                const SizedBox(height: 20),
+                // Có hoá đơn thì số tiền là tổng hoá đơn, hiện ở cuối phần
+                // hoá đơn bên dưới, nên không cho gõ tay nữa.
+                if (!_usesBill) ...[
+                  AmountField(
+                    controller: _amountController,
+                    autofocus: !_isEditing,
+                    label: _canSplit && _split.enabled
+                        ? 'Tổng hoá đơn'
+                        : 'Số tiền',
+                    // Bảng chia tiền và dòng "khoản này lấy tiền từ đâu" đều
+                    // phụ thuộc vào số tiền nên phải vẽ lại theo từng phím.
+                    onChanged: (_) => setState(() {}),
+                  ),
+                  const SizedBox(height: 20),
+                ],
                 ..._buildFieldsForKind(walletList),
                 if (_kind == TxKind.expense) ...[
                   const SizedBox(height: 12),
                   _FundPicker(
                     value: _fundId,
                     onChanged: (v) => setState(() => _fundId = v),
+                  ),
+                ],
+                if (_canBill) ...[
+                  const SizedBox(height: 8),
+                  BillSection(
+                    state: _bill,
+                    onChanged: () => setState(() {}),
                   ),
                 ],
                 if (_canSplit) ...[
@@ -469,7 +517,7 @@ class _TxEditorScreenState extends ConsumerState<TxEditorScreen> {
     final today = ref.watch(todayProvider);
     if (monthKeyOf(_occurredAt) != monthKeyOf(today)) return none;
 
-    final total = parseVnd(_amountController.text);
+    final total = _amount;
     final Widget note;
     if (_kind == TxKind.lend) {
       note = SpendImpactNote(amount: 0, categoryId: null, outside: total);

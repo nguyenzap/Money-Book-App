@@ -1,6 +1,7 @@
 import 'package:drift/drift.dart';
 import 'package:uuid/uuid.dart';
 
+import '../domain/bill.dart';
 import '../domain/fund_delta.dart';
 import '../domain/tx_kind.dart';
 import '../format/dates.dart';
@@ -37,6 +38,7 @@ class TxView {
     this.walletTo,
     this.category,
     this.person,
+    this.billCount = 0,
   });
 
   final Transaction tx;
@@ -44,6 +46,11 @@ class TxView {
   final Wallet? walletTo;
   final Category? category;
   final Person? person;
+
+  /// Số dòng trong hoá đơn chi tiết, 0 nếu không có hoá đơn.
+  final int billCount;
+
+  bool get hasBill => billCount > 0;
 
   TxKind get kind => tx.kind;
 
@@ -867,7 +874,8 @@ class Repository {
              wf.name AS wf_name, wf.color_value AS wf_color, wf.icon_key AS wf_icon,
              wt.name AS wt_name, wt.color_value AS wt_color, wt.icon_key AS wt_icon,
              c.name  AS c_name,  c.color_value  AS c_color,  c.icon_key  AS c_icon,
-             p.name  AS p_name,  p.avatar_color AS p_color
+             p.name  AS p_name,  p.avatar_color AS p_color,
+             $_billCountExpr AS bill_count
       FROM transactions t
       LEFT JOIN wallets    wf ON wf.id = t.wallet_from_id
       LEFT JOIN wallets    wt ON wt.id = t.wallet_to_id
@@ -882,7 +890,13 @@ class Repository {
         .customSelect(
           sql,
           variables: vars,
-          readsFrom: {db.transactions, db.wallets, db.categories, db.people},
+          readsFrom: {
+            db.transactions,
+            db.wallets,
+            db.categories,
+            db.people,
+            db.billItems,
+          },
         )
         .watch()
         .map((rows) => rows.map(_rowToTxView).toList());
@@ -928,8 +942,12 @@ class Repository {
               createdAt: 0,
               updatedAt: 0,
             ),
+      billCount: row.read<int>('bill_count'),
     );
   }
+
+  static const _billCountExpr =
+      '(SELECT COUNT(*) FROM bill_items b WHERE b.transaction_id = t.id)';
 
   /// Chỉ dựng phần thông tin ví cần cho việc hiển thị; các cột còn lại không
   /// được dùng tới ở danh sách nên để giá trị trung tính.
@@ -962,7 +980,8 @@ class Repository {
                  wf.name AS wf_name, wf.color_value AS wf_color, wf.icon_key AS wf_icon,
                  wt.name AS wt_name, wt.color_value AS wt_color, wt.icon_key AS wt_icon,
                  c.name  AS c_name,  c.color_value  AS c_color,  c.icon_key  AS c_icon,
-                 p.name  AS p_name,  p.avatar_color AS p_color
+                 p.name  AS p_name,  p.avatar_color AS p_color,
+                 $_billCountExpr AS bill_count
           FROM transactions t
           LEFT JOIN wallets    wf ON wf.id = t.wallet_from_id
           LEFT JOIN wallets    wt ON wt.id = t.wallet_to_id
@@ -971,7 +990,13 @@ class Repository {
           WHERE t.id = ?
           ''',
           variables: [Variable.withInt(id)],
-          readsFrom: {db.transactions, db.wallets, db.categories, db.people},
+          readsFrom: {
+            db.transactions,
+            db.wallets,
+            db.categories,
+            db.people,
+            db.billItems,
+          },
         )
         .watch()
         .map((rows) => rows.isEmpty ? null : _rowToTxView(rows.first));
@@ -997,8 +1022,10 @@ class Repository {
     String? groupId,
     int? recurringId,
     bool isWriteoff = false,
+    List<BillLine> bill = const [],
   }) async {
     assert(amount > 0, 'amount phải dương, dấu suy ra từ kind');
+    _checkBill(amount, bill);
     final now = _now();
     final fundDelta = await _fundDeltaFor(
       fundId: fundId,
@@ -1007,32 +1034,81 @@ class Repository {
       walletToId: walletToId,
       intoFund: intoFund,
     );
-    return db
-        .into(db.transactions)
-        .insert(
-          TransactionsCompanion.insert(
-            kind: kind,
-            amount: amount,
-            occurredAt: occurredAt.millisecondsSinceEpoch,
-            dayKey: dayKeyOf(occurredAt),
-            monthKey: monthKeyOf(occurredAt),
-            walletFromId: Value(walletFromId),
-            walletToId: Value(walletToId),
-            categoryId: Value(categoryId),
-            personId: Value(personId),
-            fundId: Value(fundId),
-            fundDelta: Value(fundDelta),
-            debtDelta: Value(kind.debtDelta(amount)),
-            note: Value(note),
-            groupId: Value(groupId),
-            recurringId: Value(recurringId),
-            isWriteoff: Value(isWriteoff),
-            createdAt: now,
-            updatedAt: now,
-          ),
-        );
+    return db.transaction(() async {
+      final id = await db
+          .into(db.transactions)
+          .insert(
+            TransactionsCompanion.insert(
+              kind: kind,
+              amount: amount,
+              occurredAt: occurredAt.millisecondsSinceEpoch,
+              dayKey: dayKeyOf(occurredAt),
+              monthKey: monthKeyOf(occurredAt),
+              walletFromId: Value(walletFromId),
+              walletToId: Value(walletToId),
+              categoryId: Value(categoryId),
+              personId: Value(personId),
+              fundId: Value(fundId),
+              fundDelta: Value(fundDelta),
+              debtDelta: Value(kind.debtDelta(amount)),
+              note: Value(note),
+              groupId: Value(groupId),
+              recurringId: Value(recurringId),
+              isWriteoff: Value(isWriteoff),
+              createdAt: now,
+              updatedAt: now,
+            ),
+          );
+      await _writeBill(id, bill);
+      return id;
+    });
   }
 
+  /// Có hoá đơn thì số tiền phải đúng bằng tổng hoá đơn, không thì sổ sách
+  /// và hoá đơn mỗi bên nói một số.
+  void _checkBill(int amount, List<BillLine> bill) {
+    if (bill.isEmpty) return;
+    final error = validateBill(bill);
+    if (error != null) throw ArgumentError(error);
+    if (billTotal(bill) != amount) {
+      throw ArgumentError(
+        'Số tiền $amount không khớp tổng hoá đơn ${billTotal(bill)}',
+      );
+    }
+  }
+
+  /// Ghi đè toàn bộ hoá đơn của một giao dịch. Danh sách rỗng là bỏ hoá đơn.
+  Future<void> _writeBill(int transactionId, List<BillLine> bill) async {
+    await (db.delete(
+      db.billItems,
+    )..where((b) => b.transactionId.equals(transactionId))).go();
+    for (var i = 0; i < bill.length; i++) {
+      final l = bill[i];
+      await db
+          .into(db.billItems)
+          .insert(
+            BillItemsCompanion.insert(
+              transactionId: transactionId,
+              name: l.name.trim(),
+              quantity: Value(l.quantity),
+              unitPrice: l.unitPrice,
+              isDiscount: Value(l.isDiscount),
+              sortOrder: Value(i),
+            ),
+          );
+    }
+  }
+
+  /// Hoá đơn chi tiết của một giao dịch, theo thứ tự lúc nhập.
+  Stream<List<BillItem>> watchBill(int transactionId) {
+    return (db.select(db.billItems)
+          ..where((b) => b.transactionId.equals(transactionId))
+          ..orderBy([(b) => OrderingTerm.asc(b.sortOrder)]))
+        .watch();
+  }
+
+  /// [bill] null thì giữ nguyên hoá đơn đang có; danh sách rỗng là bỏ hoá
+  /// đơn.
   Future<void> updateTransaction({
     required int id,
     required TxKind kind,
@@ -1044,8 +1120,10 @@ class Repository {
     int? personId,
     int? fundId,
     String? note,
+    List<BillLine>? bill,
   }) async {
     assert(amount > 0);
+    if (bill != null) _checkBill(amount, bill);
     // Nạp / rút ngay trong ví giữ quỹ không suy được chiều từ chân ví, nên giữ
     // chiều cũ của chính giao dịch này.
     final old = await (db.select(db.transactions)
@@ -1058,24 +1136,27 @@ class Repository {
       walletToId: walletToId,
       intoFund: old == null || old.fundDelta == 0 ? null : old.fundDelta > 0,
     );
-    await (db.update(db.transactions)..where((t) => t.id.equals(id))).write(
-      TransactionsCompanion(
-        kind: Value(kind),
-        amount: Value(amount),
-        occurredAt: Value(occurredAt.millisecondsSinceEpoch),
-        dayKey: Value(dayKeyOf(occurredAt)),
-        monthKey: Value(monthKeyOf(occurredAt)),
-        walletFromId: Value(walletFromId),
-        walletToId: Value(walletToId),
-        categoryId: Value(categoryId),
-        personId: Value(personId),
-        fundId: Value(fundId),
-        fundDelta: Value(fundDelta),
-        debtDelta: Value(kind.debtDelta(amount)),
-        note: Value(note),
-        updatedAt: Value(_now()),
-      ),
-    );
+    await db.transaction(() async {
+      await (db.update(db.transactions)..where((t) => t.id.equals(id))).write(
+        TransactionsCompanion(
+          kind: Value(kind),
+          amount: Value(amount),
+          occurredAt: Value(occurredAt.millisecondsSinceEpoch),
+          dayKey: Value(dayKeyOf(occurredAt)),
+          monthKey: Value(monthKeyOf(occurredAt)),
+          walletFromId: Value(walletFromId),
+          walletToId: Value(walletToId),
+          categoryId: Value(categoryId),
+          personId: Value(personId),
+          fundId: Value(fundId),
+          fundDelta: Value(fundDelta),
+          debtDelta: Value(kind.debtDelta(amount)),
+          note: Value(note),
+          updatedAt: Value(_now()),
+        ),
+      );
+      if (bill != null) await _writeBill(id, bill);
+    });
   }
 
   /// Xoá mềm, để còn hoàn tác được.
@@ -1182,7 +1263,8 @@ class Repository {
              wf.name AS wf_name, wf.color_value AS wf_color, wf.icon_key AS wf_icon,
              wt.name AS wt_name, wt.color_value AS wt_color, wt.icon_key AS wt_icon,
              c.name  AS c_name,  c.color_value  AS c_color,  c.icon_key  AS c_icon,
-             p.name  AS p_name,  p.avatar_color AS p_color
+             p.name  AS p_name,  p.avatar_color AS p_color,
+             $_billCountExpr AS bill_count
       FROM transactions t
       LEFT JOIN wallets    wf ON wf.id = t.wallet_from_id
       LEFT JOIN wallets    wt ON wt.id = t.wallet_to_id
@@ -1192,7 +1274,13 @@ class Repository {
       ORDER BY t.kind DESC, t.id
       ''',
           variables: [Variable.withString(groupId)],
-          readsFrom: {db.transactions, db.wallets, db.categories, db.people},
+          readsFrom: {
+            db.transactions,
+            db.wallets,
+            db.categories,
+            db.people,
+            db.billItems,
+          },
         )
         .get();
     return rows.map(_rowToTxView).toList();
@@ -1300,7 +1388,8 @@ class Repository {
                  wf.name AS wf_name, wf.color_value AS wf_color, wf.icon_key AS wf_icon,
                  wt.name AS wt_name, wt.color_value AS wt_color, wt.icon_key AS wt_icon,
                  c.name  AS c_name,  c.color_value  AS c_color,  c.icon_key  AS c_icon,
-                 p.name  AS p_name,  p.avatar_color AS p_color
+                 p.name  AS p_name,  p.avatar_color AS p_color,
+                 $_billCountExpr AS bill_count
           FROM transactions t
           LEFT JOIN wallets    wf ON wf.id = t.wallet_from_id
           LEFT JOIN wallets    wt ON wt.id = t.wallet_to_id
@@ -1311,7 +1400,13 @@ class Repository {
           LIMIT $limit
           ''',
           variables: [Variable.withInt(monthKey)],
-          readsFrom: {db.transactions, db.wallets, db.categories, db.people},
+          readsFrom: {
+            db.transactions,
+            db.wallets,
+            db.categories,
+            db.people,
+            db.billItems,
+          },
         )
         .watch()
         .map((rows) => rows.map(_rowToTxView).toList());

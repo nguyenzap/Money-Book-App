@@ -15,7 +15,7 @@ import '../../core/format/dates.dart';
 ///
 /// Tăng lên mỗi khi cấu trúc file đổi, để bản app cũ biết mà từ chối file mới
 /// thay vì đọc bừa rồi hỏng dữ liệu.
-const kBackupFormatVersion = 4;
+const kBackupFormatVersion = 5;
 
 class BackupStats {
   const BackupStats({
@@ -81,6 +81,7 @@ class BackupService {
     final budgets = await db.select(db.budgets).get();
     final funds = await db.select(db.funds).get();
     final templates = await db.select(db.expenseTemplates).get();
+    final billItems = await db.select(db.billItems).get();
 
     final data = <String, dynamic>{
       'formatVersion': kBackupFormatVersion,
@@ -94,6 +95,7 @@ class BackupService {
       'budgets': budgets.map(_budgetToMap).toList(),
       'funds': funds.map(_fundToMap).toList(),
       'templates': templates.map(_templateToMap).toList(),
+      'billItems': billItems.map(_billItemToMap).toList(),
     };
 
     return const JsonEncoder.withIndent('  ').convert(data);
@@ -214,10 +216,13 @@ class BackupService {
         .cast<Map<String, dynamic>>();
     final templateRows = ((data['templates'] as List?) ?? const [])
         .cast<Map<String, dynamic>>();
+    final billRows = ((data['billItems'] as List?) ?? const [])
+        .cast<Map<String, dynamic>>();
 
     await db.transaction(() async {
       if (mode == ImportMode.replace) {
         // Xoá theo thứ tự ngược với phụ thuộc khoá ngoại.
+        await db.delete(db.billItems).go();
         await db.delete(db.transactions).go();
         await db.delete(db.budgets).go();
         await db.delete(db.funds).go();
@@ -309,6 +314,7 @@ class BackupService {
         fundWallets[newId] = walletId;
       }
 
+      final txIds = <int, int>{};
       for (final row in txRows) {
         final kind = TxKindX.fromId(row['kind'] as String);
         final amount = row['amount'] as int;
@@ -331,7 +337,7 @@ class BackupService {
                 intoFund: fileDelta == 0 ? null : fileDelta > 0,
               );
 
-        await db
+        txIds[row['id'] as int] = await db
             .into(db.transactions)
             .insert(
               TransactionsCompanion.insert(
@@ -356,6 +362,24 @@ class BackupService {
                 createdAt: row['createdAt'] as int? ?? 0,
                 updatedAt: row['updatedAt'] as int? ?? 0,
                 deletedAt: Value(row['deletedAt'] as int?),
+              ),
+            );
+      }
+
+      for (final row in billRows) {
+        final txId = txIds[row['transactionId']];
+        final unitPrice = row['unitPrice'] as int? ?? 0;
+        if (txId == null || unitPrice <= 0) continue;
+        await db
+            .into(db.billItems)
+            .insert(
+              BillItemsCompanion.insert(
+                transactionId: txId,
+                name: row['name'] as String? ?? '',
+                quantity: Value(row['quantity'] as int? ?? 1),
+                unitPrice: unitPrice,
+                isDiscount: Value(row['isDiscount'] as bool? ?? false),
+                sortOrder: Value(row['sortOrder'] as int? ?? 0),
               ),
             );
       }
@@ -533,6 +557,16 @@ class BackupService {
     'sortOrder': t.sortOrder,
     'createdAt': t.createdAt,
     'updatedAt': t.updatedAt,
+  };
+
+  Map<String, dynamic> _billItemToMap(BillItem b) => {
+    'id': b.id,
+    'transactionId': b.transactionId,
+    'name': b.name,
+    'quantity': b.quantity,
+    'unitPrice': b.unitPrice,
+    'isDiscount': b.isDiscount,
+    'sortOrder': b.sortOrder,
   };
 
   Map<String, dynamic> _budgetToMap(Budget b) => {

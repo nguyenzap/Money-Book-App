@@ -7,7 +7,7 @@ trong máy, không server, không tài khoản.
 
 ```powershell
 flutter run -d <device>                 # dev, hot reload bằng phím r
-flutter test                            # 281 test, chạy trong ~2 giây
+flutter test                            # 291 test, chạy trong ~3 giây
 flutter analyze
 dart run build_runner build             # BẮT BUỘC sau khi sửa lib/core/db/tables.dart
 flutter build apk --release --target-platform android-arm64
@@ -185,6 +185,21 @@ hình. Xoá ví / danh mục thì mẫu chỉ mất trường đó (`deleteWalle
 `deleteCategory` gỡ trước, nếu không khoá ngoại chặn). Nút ghi nhanh ở màn
 Tổng quan (giữ để sửa) và đầu bảng nút cộng; màn ghi chi tiêu có nút "Lưu làm
 mẫu".
+
+## Hoá đơn chi tiết
+
+Bảng `bill_items` (tên món, số lượng, đơn giá, `is_discount`), gắn vào một
+khoản chi. Có hoá đơn thì **số tiền khoản chi chính là tổng hoá đơn**
+(`billTotal`, `lib/core/domain/bill.dart`): màn ghi ẩn ô số tiền, và
+`addTransaction` / `updateTransaction` ném `ArgumentError` nếu hai số lệch
+nhau. Đơn giá luôn dương, giảm giá là cờ `is_discount` — cùng tinh thần với
+`amount`. Món không ảnh hưởng thống kê hay ngân sách, chúng vẫn chỉ thấy một
+khoản chi.
+
+`updateTransaction(bill: null)` giữ nguyên hoá đơn, `bill: []` là bỏ. Xoá mềm
+để nguyên các dòng (hoàn tác được), xoá hẳn thì `ON DELETE CASCADE` dọn theo.
+Không đi cùng trả dùm (trả dùm tách hoá đơn thành nhiều giao dịch). CSV chưa
+xuất các món, JSON thì có (`billItems`, định dạng sao lưu v5).
 
 ## Sao lưu
 

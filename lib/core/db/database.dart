@@ -22,6 +22,7 @@ part 'database.g.dart';
     Budgets,
     Funds,
     ExpenseTemplates,
+    BillItems,
     SettingsKv,
   ],
 )
@@ -32,7 +33,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.e);
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -79,6 +80,13 @@ class AppDatabase extends _$AppDatabase {
               WHERE fund_id IS NOT NULL
             ''');
           }
+          // v5: hoá đơn chi tiết của khoản chi.
+          if (from < 5) {
+            await m.createTable(billItems);
+            await customStatement(
+              'CREATE INDEX IF NOT EXISTS ix_bill_tx ON bill_items(transaction_id)',
+            );
+          }
         },
         beforeOpen: (details) async {
           // SQLite mặc định TẮT ràng buộc khoá ngoại. Không bật thì mọi
@@ -109,6 +117,7 @@ class AppDatabase extends _$AppDatabase {
       'CREATE INDEX IF NOT EXISTS ix_tx_fund ON transactions(fund_id) '
           'WHERE deleted_at IS NULL',
       'CREATE INDEX IF NOT EXISTS ix_funds_wallet ON funds(wallet_id)',
+      'CREATE INDEX IF NOT EXISTS ix_bill_tx ON bill_items(transaction_id)',
       'CREATE INDEX IF NOT EXISTS ix_recurring_due ON recurring_templates(is_active, next_due_at)',
       'CREATE UNIQUE INDEX IF NOT EXISTS ux_budget ON budgets(category_id, month_key)',
     ];

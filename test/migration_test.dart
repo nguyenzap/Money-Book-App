@@ -166,7 +166,7 @@ void main() {
 
     test('migration chạy được và lên đúng phiên bản', () async {
       final row = await db.customSelect('PRAGMA user_version').getSingle();
-      expect(row.data.values.first, 4);
+      expect(row.data.values.first, 5);
     });
 
     test('bảng mẫu chi tiêu đã có và dùng được ngay', () async {
@@ -181,6 +181,12 @@ void main() {
         await repo.recordFromTemplate(id, occurredAt: DateTime(2026, 9, 12)),
         isNotNull,
       );
+    });
+
+    test('bảng hoá đơn chi tiết đã có, giao dịch cũ không có hoá đơn', () async {
+      final views = await repo.watchTransactions().first;
+      expect(views, isNotEmpty);
+      expect(views.every((v) => !v.hasBill), isTrue);
     });
 
     test('dữ liệu cũ còn nguyên vẹn', () async {
@@ -336,7 +342,7 @@ void main() {
       await db.customStatement('SELECT 1');
 
       final row = await db.customSelect('PRAGMA user_version').getSingle();
-      expect(row.data.values.first, 4);
+      expect(row.data.values.first, 5);
       expect(await repo.watchFunds().first, isEmpty);
       expect(await repo.watchTemplates().first, isEmpty);
       expect(await repo.watchTotalInFunds().first, 0);

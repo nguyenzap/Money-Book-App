@@ -5571,6 +5571,468 @@ class ExpenseTemplatesCompanion extends UpdateCompanion<ExpenseTemplate> {
   }
 }
 
+class $BillItemsTable extends BillItems
+    with TableInfo<$BillItemsTable, BillItem> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $BillItemsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _transactionIdMeta = const VerificationMeta(
+    'transactionId',
+  );
+  @override
+  late final GeneratedColumn<int> transactionId = GeneratedColumn<int>(
+    'transaction_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES transactions (id) ON DELETE CASCADE',
+    ),
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _quantityMeta = const VerificationMeta(
+    'quantity',
+  );
+  @override
+  late final GeneratedColumn<int> quantity = GeneratedColumn<int>(
+    'quantity',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
+  );
+  static const VerificationMeta _unitPriceMeta = const VerificationMeta(
+    'unitPrice',
+  );
+  @override
+  late final GeneratedColumn<int> unitPrice = GeneratedColumn<int>(
+    'unit_price',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _isDiscountMeta = const VerificationMeta(
+    'isDiscount',
+  );
+  @override
+  late final GeneratedColumn<bool> isDiscount = GeneratedColumn<bool>(
+    'is_discount',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_discount" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _sortOrderMeta = const VerificationMeta(
+    'sortOrder',
+  );
+  @override
+  late final GeneratedColumn<int> sortOrder = GeneratedColumn<int>(
+    'sort_order',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    transactionId,
+    name,
+    quantity,
+    unitPrice,
+    isDiscount,
+    sortOrder,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'bill_items';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<BillItem> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('transaction_id')) {
+      context.handle(
+        _transactionIdMeta,
+        transactionId.isAcceptableOrUnknown(
+          data['transaction_id']!,
+          _transactionIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_transactionIdMeta);
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('quantity')) {
+      context.handle(
+        _quantityMeta,
+        quantity.isAcceptableOrUnknown(data['quantity']!, _quantityMeta),
+      );
+    }
+    if (data.containsKey('unit_price')) {
+      context.handle(
+        _unitPriceMeta,
+        unitPrice.isAcceptableOrUnknown(data['unit_price']!, _unitPriceMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_unitPriceMeta);
+    }
+    if (data.containsKey('is_discount')) {
+      context.handle(
+        _isDiscountMeta,
+        isDiscount.isAcceptableOrUnknown(data['is_discount']!, _isDiscountMeta),
+      );
+    }
+    if (data.containsKey('sort_order')) {
+      context.handle(
+        _sortOrderMeta,
+        sortOrder.isAcceptableOrUnknown(data['sort_order']!, _sortOrderMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  BillItem map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return BillItem(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      transactionId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}transaction_id'],
+      )!,
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      )!,
+      quantity: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}quantity'],
+      )!,
+      unitPrice: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}unit_price'],
+      )!,
+      isDiscount: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_discount'],
+      )!,
+      sortOrder: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}sort_order'],
+      )!,
+    );
+  }
+
+  @override
+  $BillItemsTable createAlias(String alias) {
+    return $BillItemsTable(attachedDatabase, alias);
+  }
+}
+
+class BillItem extends DataClass implements Insertable<BillItem> {
+  final int id;
+  final int transactionId;
+  final String name;
+  final int quantity;
+
+  /// Đơn giá, LUÔN dương. Dòng giảm giá đánh dấu bằng [isDiscount], giống
+  /// cách [Transactions.amount] để dấu cho kind.
+  final int unitPrice;
+  final bool isDiscount;
+  final int sortOrder;
+  const BillItem({
+    required this.id,
+    required this.transactionId,
+    required this.name,
+    required this.quantity,
+    required this.unitPrice,
+    required this.isDiscount,
+    required this.sortOrder,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['transaction_id'] = Variable<int>(transactionId);
+    map['name'] = Variable<String>(name);
+    map['quantity'] = Variable<int>(quantity);
+    map['unit_price'] = Variable<int>(unitPrice);
+    map['is_discount'] = Variable<bool>(isDiscount);
+    map['sort_order'] = Variable<int>(sortOrder);
+    return map;
+  }
+
+  BillItemsCompanion toCompanion(bool nullToAbsent) {
+    return BillItemsCompanion(
+      id: Value(id),
+      transactionId: Value(transactionId),
+      name: Value(name),
+      quantity: Value(quantity),
+      unitPrice: Value(unitPrice),
+      isDiscount: Value(isDiscount),
+      sortOrder: Value(sortOrder),
+    );
+  }
+
+  factory BillItem.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return BillItem(
+      id: serializer.fromJson<int>(json['id']),
+      transactionId: serializer.fromJson<int>(json['transactionId']),
+      name: serializer.fromJson<String>(json['name']),
+      quantity: serializer.fromJson<int>(json['quantity']),
+      unitPrice: serializer.fromJson<int>(json['unitPrice']),
+      isDiscount: serializer.fromJson<bool>(json['isDiscount']),
+      sortOrder: serializer.fromJson<int>(json['sortOrder']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'transactionId': serializer.toJson<int>(transactionId),
+      'name': serializer.toJson<String>(name),
+      'quantity': serializer.toJson<int>(quantity),
+      'unitPrice': serializer.toJson<int>(unitPrice),
+      'isDiscount': serializer.toJson<bool>(isDiscount),
+      'sortOrder': serializer.toJson<int>(sortOrder),
+    };
+  }
+
+  BillItem copyWith({
+    int? id,
+    int? transactionId,
+    String? name,
+    int? quantity,
+    int? unitPrice,
+    bool? isDiscount,
+    int? sortOrder,
+  }) => BillItem(
+    id: id ?? this.id,
+    transactionId: transactionId ?? this.transactionId,
+    name: name ?? this.name,
+    quantity: quantity ?? this.quantity,
+    unitPrice: unitPrice ?? this.unitPrice,
+    isDiscount: isDiscount ?? this.isDiscount,
+    sortOrder: sortOrder ?? this.sortOrder,
+  );
+  BillItem copyWithCompanion(BillItemsCompanion data) {
+    return BillItem(
+      id: data.id.present ? data.id.value : this.id,
+      transactionId: data.transactionId.present
+          ? data.transactionId.value
+          : this.transactionId,
+      name: data.name.present ? data.name.value : this.name,
+      quantity: data.quantity.present ? data.quantity.value : this.quantity,
+      unitPrice: data.unitPrice.present ? data.unitPrice.value : this.unitPrice,
+      isDiscount: data.isDiscount.present
+          ? data.isDiscount.value
+          : this.isDiscount,
+      sortOrder: data.sortOrder.present ? data.sortOrder.value : this.sortOrder,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('BillItem(')
+          ..write('id: $id, ')
+          ..write('transactionId: $transactionId, ')
+          ..write('name: $name, ')
+          ..write('quantity: $quantity, ')
+          ..write('unitPrice: $unitPrice, ')
+          ..write('isDiscount: $isDiscount, ')
+          ..write('sortOrder: $sortOrder')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    transactionId,
+    name,
+    quantity,
+    unitPrice,
+    isDiscount,
+    sortOrder,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is BillItem &&
+          other.id == this.id &&
+          other.transactionId == this.transactionId &&
+          other.name == this.name &&
+          other.quantity == this.quantity &&
+          other.unitPrice == this.unitPrice &&
+          other.isDiscount == this.isDiscount &&
+          other.sortOrder == this.sortOrder);
+}
+
+class BillItemsCompanion extends UpdateCompanion<BillItem> {
+  final Value<int> id;
+  final Value<int> transactionId;
+  final Value<String> name;
+  final Value<int> quantity;
+  final Value<int> unitPrice;
+  final Value<bool> isDiscount;
+  final Value<int> sortOrder;
+  const BillItemsCompanion({
+    this.id = const Value.absent(),
+    this.transactionId = const Value.absent(),
+    this.name = const Value.absent(),
+    this.quantity = const Value.absent(),
+    this.unitPrice = const Value.absent(),
+    this.isDiscount = const Value.absent(),
+    this.sortOrder = const Value.absent(),
+  });
+  BillItemsCompanion.insert({
+    this.id = const Value.absent(),
+    required int transactionId,
+    required String name,
+    this.quantity = const Value.absent(),
+    required int unitPrice,
+    this.isDiscount = const Value.absent(),
+    this.sortOrder = const Value.absent(),
+  }) : transactionId = Value(transactionId),
+       name = Value(name),
+       unitPrice = Value(unitPrice);
+  static Insertable<BillItem> custom({
+    Expression<int>? id,
+    Expression<int>? transactionId,
+    Expression<String>? name,
+    Expression<int>? quantity,
+    Expression<int>? unitPrice,
+    Expression<bool>? isDiscount,
+    Expression<int>? sortOrder,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (transactionId != null) 'transaction_id': transactionId,
+      if (name != null) 'name': name,
+      if (quantity != null) 'quantity': quantity,
+      if (unitPrice != null) 'unit_price': unitPrice,
+      if (isDiscount != null) 'is_discount': isDiscount,
+      if (sortOrder != null) 'sort_order': sortOrder,
+    });
+  }
+
+  BillItemsCompanion copyWith({
+    Value<int>? id,
+    Value<int>? transactionId,
+    Value<String>? name,
+    Value<int>? quantity,
+    Value<int>? unitPrice,
+    Value<bool>? isDiscount,
+    Value<int>? sortOrder,
+  }) {
+    return BillItemsCompanion(
+      id: id ?? this.id,
+      transactionId: transactionId ?? this.transactionId,
+      name: name ?? this.name,
+      quantity: quantity ?? this.quantity,
+      unitPrice: unitPrice ?? this.unitPrice,
+      isDiscount: isDiscount ?? this.isDiscount,
+      sortOrder: sortOrder ?? this.sortOrder,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (transactionId.present) {
+      map['transaction_id'] = Variable<int>(transactionId.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (quantity.present) {
+      map['quantity'] = Variable<int>(quantity.value);
+    }
+    if (unitPrice.present) {
+      map['unit_price'] = Variable<int>(unitPrice.value);
+    }
+    if (isDiscount.present) {
+      map['is_discount'] = Variable<bool>(isDiscount.value);
+    }
+    if (sortOrder.present) {
+      map['sort_order'] = Variable<int>(sortOrder.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('BillItemsCompanion(')
+          ..write('id: $id, ')
+          ..write('transactionId: $transactionId, ')
+          ..write('name: $name, ')
+          ..write('quantity: $quantity, ')
+          ..write('unitPrice: $unitPrice, ')
+          ..write('isDiscount: $isDiscount, ')
+          ..write('sortOrder: $sortOrder')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $SettingsKvTable extends SettingsKv
     with TableInfo<$SettingsKvTable, SettingsKvData> {
   @override
@@ -5793,6 +6255,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $ExpenseTemplatesTable expenseTemplates = $ExpenseTemplatesTable(
     this,
   );
+  late final $BillItemsTable billItems = $BillItemsTable(this);
   late final $SettingsKvTable settingsKv = $SettingsKvTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
@@ -5807,8 +6270,19 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     transactions,
     budgets,
     expenseTemplates,
+    billItems,
     settingsKv,
   ];
+  @override
+  StreamQueryUpdateRules get streamUpdateRules => const StreamQueryUpdateRules([
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'transactions',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('bill_items', kind: UpdateKind.delete)],
+    ),
+  ]);
 }
 
 typedef $$WalletsTableCreateCompanionBuilder =
@@ -8749,6 +9223,27 @@ final class $$TransactionsTableReferences
       manager.$state.copyWith(prefetchedData: [item]),
     );
   }
+
+  static MultiTypedResultKey<$BillItemsTable, List<BillItem>>
+  _billItemsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.billItems,
+    aliasName: $_aliasNameGenerator(
+      db.transactions.id,
+      db.billItems.transactionId,
+    ),
+  );
+
+  $$BillItemsTableProcessedTableManager get billItemsRefs {
+    final manager = $$BillItemsTableTableManager(
+      $_db,
+      $_db.billItems,
+    ).filter((f) => f.transactionId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_billItemsRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
 }
 
 class $$TransactionsTableFilterComposer
@@ -8967,6 +9462,31 @@ class $$TransactionsTableFilterComposer
           ),
     );
     return composer;
+  }
+
+  Expression<bool> billItemsRefs(
+    Expression<bool> Function($$BillItemsTableFilterComposer f) f,
+  ) {
+    final $$BillItemsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.billItems,
+      getReferencedColumn: (t) => t.transactionId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$BillItemsTableFilterComposer(
+            $db: $db,
+            $table: $db.billItems,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
   }
 }
 
@@ -9381,6 +9901,31 @@ class $$TransactionsTableAnnotationComposer
     );
     return composer;
   }
+
+  Expression<T> billItemsRefs<T extends Object>(
+    Expression<T> Function($$BillItemsTableAnnotationComposer a) f,
+  ) {
+    final $$BillItemsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.billItems,
+      getReferencedColumn: (t) => t.transactionId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$BillItemsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.billItems,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$TransactionsTableTableManager
@@ -9403,6 +9948,7 @@ class $$TransactionsTableTableManager
             bool personId,
             bool recurringId,
             bool fundId,
+            bool billItemsRefs,
           })
         > {
   $$TransactionsTableTableManager(_$AppDatabase db, $TransactionsTable table)
@@ -9520,10 +10066,11 @@ class $$TransactionsTableTableManager
                 personId = false,
                 recurringId = false,
                 fundId = false,
+                billItemsRefs = false,
               }) {
                 return PrefetchHooks(
                   db: db,
-                  explicitlyWatchedTables: [],
+                  explicitlyWatchedTables: [if (billItemsRefs) db.billItems],
                   addJoins:
                       <
                         T extends TableManagerState<
@@ -9634,7 +10181,29 @@ class $$TransactionsTableTableManager
                         return state;
                       },
                   getPrefetchedDataCallback: (items) async {
-                    return [];
+                    return [
+                      if (billItemsRefs)
+                        await $_getPrefetchedData<
+                          Transaction,
+                          $TransactionsTable,
+                          BillItem
+                        >(
+                          currentTable: table,
+                          referencedTable: $$TransactionsTableReferences
+                              ._billItemsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$TransactionsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).billItemsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.transactionId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                    ];
                   },
                 );
               },
@@ -9661,6 +10230,7 @@ typedef $$TransactionsTableProcessedTableManager =
         bool personId,
         bool recurringId,
         bool fundId,
+        bool billItemsRefs,
       })
     >;
 typedef $$BudgetsTableCreateCompanionBuilder =
@@ -10466,6 +11036,359 @@ typedef $$ExpenseTemplatesTableProcessedTableManager =
       ExpenseTemplate,
       PrefetchHooks Function({bool walletId, bool categoryId})
     >;
+typedef $$BillItemsTableCreateCompanionBuilder =
+    BillItemsCompanion Function({
+      Value<int> id,
+      required int transactionId,
+      required String name,
+      Value<int> quantity,
+      required int unitPrice,
+      Value<bool> isDiscount,
+      Value<int> sortOrder,
+    });
+typedef $$BillItemsTableUpdateCompanionBuilder =
+    BillItemsCompanion Function({
+      Value<int> id,
+      Value<int> transactionId,
+      Value<String> name,
+      Value<int> quantity,
+      Value<int> unitPrice,
+      Value<bool> isDiscount,
+      Value<int> sortOrder,
+    });
+
+final class $$BillItemsTableReferences
+    extends BaseReferences<_$AppDatabase, $BillItemsTable, BillItem> {
+  $$BillItemsTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static $TransactionsTable _transactionIdTable(_$AppDatabase db) =>
+      db.transactions.createAlias(
+        $_aliasNameGenerator(db.billItems.transactionId, db.transactions.id),
+      );
+
+  $$TransactionsTableProcessedTableManager get transactionId {
+    final $_column = $_itemColumn<int>('transaction_id')!;
+
+    final manager = $$TransactionsTableTableManager(
+      $_db,
+      $_db.transactions,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_transactionIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$BillItemsTableFilterComposer
+    extends Composer<_$AppDatabase, $BillItemsTable> {
+  $$BillItemsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get quantity => $composableBuilder(
+    column: $table.quantity,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get unitPrice => $composableBuilder(
+    column: $table.unitPrice,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isDiscount => $composableBuilder(
+    column: $table.isDiscount,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get sortOrder => $composableBuilder(
+    column: $table.sortOrder,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$TransactionsTableFilterComposer get transactionId {
+    final $$TransactionsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.transactionId,
+      referencedTable: $db.transactions,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$TransactionsTableFilterComposer(
+            $db: $db,
+            $table: $db.transactions,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$BillItemsTableOrderingComposer
+    extends Composer<_$AppDatabase, $BillItemsTable> {
+  $$BillItemsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get quantity => $composableBuilder(
+    column: $table.quantity,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get unitPrice => $composableBuilder(
+    column: $table.unitPrice,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isDiscount => $composableBuilder(
+    column: $table.isDiscount,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get sortOrder => $composableBuilder(
+    column: $table.sortOrder,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$TransactionsTableOrderingComposer get transactionId {
+    final $$TransactionsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.transactionId,
+      referencedTable: $db.transactions,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$TransactionsTableOrderingComposer(
+            $db: $db,
+            $table: $db.transactions,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$BillItemsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $BillItemsTable> {
+  $$BillItemsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<int> get quantity =>
+      $composableBuilder(column: $table.quantity, builder: (column) => column);
+
+  GeneratedColumn<int> get unitPrice =>
+      $composableBuilder(column: $table.unitPrice, builder: (column) => column);
+
+  GeneratedColumn<bool> get isDiscount => $composableBuilder(
+    column: $table.isDiscount,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get sortOrder =>
+      $composableBuilder(column: $table.sortOrder, builder: (column) => column);
+
+  $$TransactionsTableAnnotationComposer get transactionId {
+    final $$TransactionsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.transactionId,
+      referencedTable: $db.transactions,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$TransactionsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.transactions,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$BillItemsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $BillItemsTable,
+          BillItem,
+          $$BillItemsTableFilterComposer,
+          $$BillItemsTableOrderingComposer,
+          $$BillItemsTableAnnotationComposer,
+          $$BillItemsTableCreateCompanionBuilder,
+          $$BillItemsTableUpdateCompanionBuilder,
+          (BillItem, $$BillItemsTableReferences),
+          BillItem,
+          PrefetchHooks Function({bool transactionId})
+        > {
+  $$BillItemsTableTableManager(_$AppDatabase db, $BillItemsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$BillItemsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$BillItemsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$BillItemsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<int> transactionId = const Value.absent(),
+                Value<String> name = const Value.absent(),
+                Value<int> quantity = const Value.absent(),
+                Value<int> unitPrice = const Value.absent(),
+                Value<bool> isDiscount = const Value.absent(),
+                Value<int> sortOrder = const Value.absent(),
+              }) => BillItemsCompanion(
+                id: id,
+                transactionId: transactionId,
+                name: name,
+                quantity: quantity,
+                unitPrice: unitPrice,
+                isDiscount: isDiscount,
+                sortOrder: sortOrder,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required int transactionId,
+                required String name,
+                Value<int> quantity = const Value.absent(),
+                required int unitPrice,
+                Value<bool> isDiscount = const Value.absent(),
+                Value<int> sortOrder = const Value.absent(),
+              }) => BillItemsCompanion.insert(
+                id: id,
+                transactionId: transactionId,
+                name: name,
+                quantity: quantity,
+                unitPrice: unitPrice,
+                isDiscount: isDiscount,
+                sortOrder: sortOrder,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$BillItemsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({transactionId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (transactionId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.transactionId,
+                                referencedTable: $$BillItemsTableReferences
+                                    ._transactionIdTable(db),
+                                referencedColumn: $$BillItemsTableReferences
+                                    ._transactionIdTable(db)
+                                    .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$BillItemsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $BillItemsTable,
+      BillItem,
+      $$BillItemsTableFilterComposer,
+      $$BillItemsTableOrderingComposer,
+      $$BillItemsTableAnnotationComposer,
+      $$BillItemsTableCreateCompanionBuilder,
+      $$BillItemsTableUpdateCompanionBuilder,
+      (BillItem, $$BillItemsTableReferences),
+      BillItem,
+      PrefetchHooks Function({bool transactionId})
+    >;
 typedef $$SettingsKvTableCreateCompanionBuilder =
     SettingsKvCompanion Function({
       required String key,
@@ -10625,6 +11548,8 @@ class $AppDatabaseManager {
       $$BudgetsTableTableManager(_db, _db.budgets);
   $$ExpenseTemplatesTableTableManager get expenseTemplates =>
       $$ExpenseTemplatesTableTableManager(_db, _db.expenseTemplates);
+  $$BillItemsTableTableManager get billItems =>
+      $$BillItemsTableTableManager(_db, _db.billItems);
   $$SettingsKvTableTableManager get settingsKv =>
       $$SettingsKvTableTableManager(_db, _db.settingsKv);
 }
