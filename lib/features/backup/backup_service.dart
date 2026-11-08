@@ -355,7 +355,12 @@ class BackupService {
                 fundId: Value(fundId),
                 fundDelta: Value(fundDelta),
                 // Tính lại từ kind, không tin số trong file.
-                debtDelta: Value(kind.debtDelta(amount)),
+                debtDelta: Value(
+                  kind.debtDelta(
+                    amount,
+                    hasPerson: personIds[row['personId']] != null,
+                  ),
+                ),
                 note: Value(row['note'] as String?),
                 groupId: Value(row['groupId'] as String?),
                 isWriteoff: Value(row['isWriteoff'] as bool? ?? false),

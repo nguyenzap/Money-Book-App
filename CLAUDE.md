@@ -7,7 +7,7 @@ trong máy, không server, không tài khoản.
 
 ```powershell
 flutter run -d <device>                 # dev, hot reload bằng phím r
-flutter test                            # 291 test, chạy trong ~3 giây
+flutter test                            # 304 test, chạy trong ~10 giây
 flutter analyze
 dart run build_runner build             # BẮT BUỘC sau khi sửa lib/core/db/tables.dart
 flutter build apk --release --target-platform android-arm64
@@ -85,17 +85,19 @@ danh tính đến từ nhãn chữ nên số lượng danh mục không bị gi�
 
 ## Tự động build
 
-`.github/workflows/ci.yml` chạy analyze + test mỗi lần push. Workflow
-`release.yml` build APK đã ký và tạo bản phát hành khi đẩy thẻ `v1.2.3`:
+`.github/workflows/ci.yml` chạy analyze + test mỗi lần push. Phát hành thì
+build **trên máy** (GitHub Actions quá chậm) rồi chỉ đẩy APK lên Releases:
 
 ```powershell
-git tag v1.0.1
-git push origin v1.0.1
+.\scripts\release.ps1 v1.2.0          # -DryRun: chỉ build + kiểm chữ ký
 ```
 
-Số phiên bản lấy từ tên thẻ qua `--build-name`, nên không phải sửa `pubspec.yaml`.
-Keystore nạp từ GitHub Secrets (xem `.github/README.md`), và có một bước chạy
-`apksigner` chặn lại nếu APK lỡ bị ký bằng debug key.
+Script: test → build arm64 → `apksigner` chặn nếu ký bằng debug key → gắn thẻ,
+đẩy thẻ → `gh release create` kèm APK. Số phiên bản lấy từ tên thẻ qua
+`--build-name`, nên không phải sửa `pubspec.yaml`; `versionCode` = `v1.2.3` →
+`10203`. `release.yml` chỉ còn là dự phòng, chạy tay ở tab Actions (KHÔNG chạy
+theo thẻ, nếu không nó build lại và đụng bản script vừa tạo), dùng cùng công
+thức versionCode và keystore từ GitHub Secrets (xem `.github/README.md`).
 
 ## Chữ ký release
 
@@ -113,6 +115,24 @@ bản chất nó là một khoản chi. `Repository.addSplitBill` sinh ra một 
 Đây là lý do cả thống kê lẫn ngân sách đều chỉ đếm `expense`: một bữa 200k chia
 bốn người làm ví trừ đủ 200k nhưng chỉ 50k vào chi tiêu, nên trả dùm không bao
 giờ làm vượt hạn mức oan. Chia lẻ thì phần dư dồn vào mình để tổng khớp hoá đơn.
+
+## Người khác trả dùm
+
+Chiều ngược của trả dùm: bạn trả thay mình, mình chỉ ghi phần của mình. Công
+tắc "Người khác trả dùm" trong màn ghi Chi tiêu (cạnh công tắc chia tiền, hai
+cái loại trừ nhau). Ghi **đúng một** `expense` **không có chân ví nào**, có
+`person_id` — không tách thành "vay rồi chi" vì mình chưa hề cầm số tiền đó.
+
+- Số dư ví đúng sẵn nhờ công thức chung: không chân ví thì không đụng ví nào.
+- Thống kê, ngân sách đếm nó như mọi khoản chi.
+- Nợ: `TxKind.debtDelta(amount, hasPerson: true)` cho `expense` ra `-amount`.
+  Mọi chỗ ghi `debt_delta` (add, update, nhập sao lưu) truyền
+  `hasPerson: personId != null`. Khoản chi thường vì thế KHÔNG được mang
+  `person_id` — màn ghi chỉ gửi người khi công tắc bật.
+- Tiền tiêu được giảm ngay qua `watchTotalOwed`, dù ví không đổi.
+- `addTransaction` / `updateTransaction` ném `ArgumentError` nếu khoản chi có
+  người mà lại có ví hoặc quỹ (đếm hai lần). Trả lại thì ghi `repay` thường.
+- `TxView.isPaidByOther`; `signedAmount` vẫn âm dù không có ví.
 
 ## Ngân sách và tiền thật
 
