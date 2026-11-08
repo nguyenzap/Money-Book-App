@@ -54,6 +54,9 @@ class TxView {
 
   TxKind get kind => tx.kind;
 
+  /// Khoản chi người khác trả dùm: không đụng ví, mình nợ [person].
+  bool get isPaidByOther => kind.canBePaidByOther && tx.personId != null;
+
   /// Nhãn chính hiển thị trên dòng giao dịch.
   String get title {
     final note = tx.note?.trim();
@@ -71,6 +74,7 @@ class TxView {
     if (kind == TxKind.transfer) {
       return '${walletFrom?.name ?? '?'} → ${walletTo?.name ?? '?'}';
     }
+    if (isPaidByOther) return '${person?.name ?? '?'} trả dùm';
     final wallet = walletFrom ?? walletTo;
     return <String>[
       if (wallet != null) wallet.name,
@@ -80,8 +84,12 @@ class TxView {
 
   /// Số tiền có dấu, theo góc nhìn "tổng tài sản của tôi tăng hay giảm".
   /// Chuyển ví trả về 0 vì tổng tài sản không đổi.
+  ///
+  /// Người khác trả dùm thì ví không đổi nhưng mình mắc nợ thêm, nên vẫn là
+  /// một khoản trừ.
   int get signedAmount {
     if (kind == TxKind.transfer) return 0;
+    if (isPaidByOther) return -tx.amount;
     if (tx.walletToId != null) return tx.amount;
     if (tx.walletFromId != null) return -tx.amount;
     return 0;
@@ -1026,6 +1034,7 @@ class Repository {
   }) async {
     assert(amount > 0, 'amount phải dương, dấu suy ra từ kind');
     _checkBill(amount, bill);
+    _checkPaidByOther(kind, personId, walletFromId, walletToId, fundId);
     final now = _now();
     final fundDelta = await _fundDeltaFor(
       fundId: fundId,
@@ -1050,7 +1059,9 @@ class Repository {
               personId: Value(personId),
               fundId: Value(fundId),
               fundDelta: Value(fundDelta),
-              debtDelta: Value(kind.debtDelta(amount)),
+              debtDelta: Value(
+                kind.debtDelta(amount, hasPerson: personId != null),
+              ),
               note: Value(note),
               groupId: Value(groupId),
               recurringId: Value(recurringId),
@@ -1062,6 +1073,23 @@ class Repository {
       await _writeBill(id, bill);
       return id;
     });
+  }
+
+  /// Người khác trả dùm thì tiền không đi qua ví hay quỹ nào của mình. Cho
+  /// phép cả hai cùng lúc là vừa trừ ví vừa ghi nợ — đếm một khoản chi hai lần.
+  void _checkPaidByOther(
+    TxKind kind,
+    int? personId,
+    int? walletFromId,
+    int? walletToId,
+    int? fundId,
+  ) {
+    if (!kind.canBePaidByOther || personId == null) return;
+    if (walletFromId != null || walletToId != null || fundId != null) {
+      throw ArgumentError(
+        'Khoản chi người khác trả dùm không được trừ vào ví hay quỹ',
+      );
+    }
   }
 
   /// Có hoá đơn thì số tiền phải đúng bằng tổng hoá đơn, không thì sổ sách
@@ -1124,6 +1152,7 @@ class Repository {
   }) async {
     assert(amount > 0);
     if (bill != null) _checkBill(amount, bill);
+    _checkPaidByOther(kind, personId, walletFromId, walletToId, fundId);
     // Nạp / rút ngay trong ví giữ quỹ không suy được chiều từ chân ví, nên giữ
     // chiều cũ của chính giao dịch này.
     final old = await (db.select(db.transactions)
@@ -1150,7 +1179,7 @@ class Repository {
           personId: Value(personId),
           fundId: Value(fundId),
           fundDelta: Value(fundDelta),
-          debtDelta: Value(kind.debtDelta(amount)),
+          debtDelta: Value(kind.debtDelta(amount, hasPerson: personId != null)),
           note: Value(note),
           updatedAt: Value(_now()),
         ),

@@ -130,6 +130,16 @@ extension TxKindX on TxKind {
   /// Có thuộc sổ nợ không.
   bool get isDebtKind => needsPerson;
 
+  /// Có ghi được kiểu "người khác trả dùm" không: người khác trả tiền thay
+  /// mình, mình tiêu nhưng ví không đụng tới, chỉ nợ lại người đó.
+  ///
+  /// Ghi bằng ĐÚNG MỘT khoản chi không có chân ví nào, có người đi kèm. Không
+  /// tách thành "vay rồi chi" vì mình chưa hề cầm số tiền đó. Số dư ví đúng
+  /// sẵn nhờ công thức chung (không có chân ví thì không đụng ví nào); thống
+  /// kê và ngân sách đếm nó như mọi khoản chi; còn khoản nợ nằm ở
+  /// [debtDelta] với `hasPerson: true`.
+  bool get canBePaidByOther => this == TxKind.expense;
+
   /// Thay đổi công nợ với người liên quan.
   ///
   ///   * Kết quả > 0: người đó nợ mình THÊM [amount].
@@ -143,9 +153,14 @@ extension TxKindX on TxKind {
   /// để sổ nợ chỉ còn là một phép SUM, và để xử lý được cả trường hợp xoá nợ
   /// (write-off) — khi đó không có ví nào bị đụng tới nên không thể suy ngược
   /// từ dòng tiền.
-  int debtDelta(int amount) => switch (this) {
+  ///
+  /// [hasPerson]: giao dịch có gắn người không. Chỉ có ý nghĩa với khoản chi
+  /// ([canBePaidByOther]): khoản chi có người là người đó trả dùm, mình nợ
+  /// họ đúng số đó (-). Các loại nợ vốn luôn có người nên không xét cờ này.
+  int debtDelta(int amount, {bool hasPerson = false}) => switch (this) {
         TxKind.lend || TxKind.repay => amount,
         TxKind.borrow || TxKind.collect => -amount,
+        TxKind.expense when hasPerson => -amount,
         _ => 0,
       };
 }

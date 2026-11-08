@@ -86,12 +86,23 @@ class _TxEditorScreenState extends ConsumerState<TxEditorScreen> {
   /// Hoá đơn chi tiết. Bật lên thì số tiền là tổng hoá đơn.
   final _bill = BillState();
 
+  /// Người khác trả dùm: không chọn ví, chọn người mình nợ.
+  bool _paidByOther = false;
+
   bool get _isEditing => widget.editing != null;
 
   /// Có được chia tiền ở trạng thái hiện tại không. Trả dùm và hoá đơn chi
   /// tiết không đi cùng nhau: trả dùm tách hoá đơn thành nhiều giao dịch.
+  /// Người khác trả thì mình chỉ ghi phần của mình, không có gì để chia.
   bool get _canSplit =>
-      !_isEditing && _kind == TxKind.expense && !_bill.enabled;
+      !_isEditing &&
+      _kind == TxKind.expense &&
+      !_bill.enabled &&
+      !_paidByOther;
+
+  bool get _canPayByOther => _kind.canBePaidByOther && !_split.enabled;
+
+  bool get _isPaidByOther => _canPayByOther && _paidByOther;
 
   bool get _canBill => _kind == TxKind.expense && !_split.enabled;
 
@@ -114,6 +125,7 @@ class _TxEditorScreenState extends ConsumerState<TxEditorScreen> {
       _categoryId = editing.tx.categoryId;
       _personId = editing.tx.personId;
       _fundId = editing.tx.fundId;
+      _paidByOther = editing.isPaidByOther;
       _occurredAt =
           DateTime.fromMillisecondsSinceEpoch(editing.tx.occurredAt);
       if (editing.hasBill) _loadBill(editing.tx.id);
@@ -144,7 +156,8 @@ class _TxEditorScreenState extends ConsumerState<TxEditorScreen> {
       !_isEditing &&
       _kind == TxKind.expense &&
       !_split.enabled &&
-      !_bill.enabled;
+      !_bill.enabled &&
+      !_paidByOther;
 
   /// Lưu các trường đang nhập thành một mẫu, để lần sau ghi một chạm. Không
   /// đóng màn hình — người dùng vẫn ghi khoản này như thường.
@@ -205,6 +218,7 @@ class _TxEditorScreenState extends ConsumerState<TxEditorScreen> {
         _split.enabled = false;
         _fundId = null;
       }
+      if (!next.canBePaidByOther) _paidByOther = false;
 
       if (next == TxKind.transfer) {
         _walletFromId ??= _walletToId;
@@ -261,6 +275,9 @@ class _TxEditorScreenState extends ConsumerState<TxEditorScreen> {
     if (_kind.needsPerson && _personId == null) {
       return 'Hãy chọn người';
     }
+    if (_isPaidByOther) {
+      return _personId == null ? 'Hãy chọn người đã trả dùm' : null;
+    }
     if (_kind == TxKind.transfer) {
       if (_walletFromId == null) return 'Hãy chọn ví nguồn';
       if (_walletToId == null) return 'Hãy chọn ví nhận';
@@ -300,6 +317,11 @@ class _TxEditorScreenState extends ConsumerState<TxEditorScreen> {
     final note = _noteController.text.trim();
     final repo = ref.read(repositoryProvider);
     final bill = _usesBill ? _bill.lines : const <BillLine>[];
+    // Người khác trả thì tiền không qua ví hay quỹ nào. Khoản chi thường thì
+    // không mang người theo — có người là thành nợ.
+    final walletFromId = _isPaidByOther ? null : _walletFromId;
+    final fundId = _isPaidByOther ? null : _fundId;
+    final personId = _kind.needsPerson || _isPaidByOther ? _personId : null;
 
     if (_canSplit && _split.enabled) {
       final splitError = _split.validate(amount);
@@ -317,11 +339,11 @@ class _TxEditorScreenState extends ConsumerState<TxEditorScreen> {
         kind: _kind,
         amount: amount,
         occurredAt: _occurredAt,
-        walletFromId: _walletFromId,
+        walletFromId: walletFromId,
         walletToId: _walletToId,
         categoryId: _categoryId,
-        personId: _personId,
-        fundId: _fundId,
+        personId: personId,
+        fundId: fundId,
         note: note.isEmpty ? null : note,
         bill: bill,
       );
@@ -330,11 +352,11 @@ class _TxEditorScreenState extends ConsumerState<TxEditorScreen> {
         kind: _kind,
         amount: amount,
         occurredAt: _occurredAt,
-        walletFromId: _walletFromId,
+        walletFromId: walletFromId,
         walletToId: _walletToId,
         categoryId: _categoryId,
-        personId: _personId,
-        fundId: _fundId,
+        personId: personId,
+        fundId: fundId,
         note: note.isEmpty ? null : note,
         bill: bill,
       );
@@ -342,7 +364,14 @@ class _TxEditorScreenState extends ConsumerState<TxEditorScreen> {
 
     if (!mounted) return;
     Navigator.pop(context);
-    showSnack(context, _isEditing ? 'Đã cập nhật' : 'Đã ghi giao dịch');
+    showSnack(
+      context,
+      _isEditing
+          ? 'Đã cập nhật'
+          : _isPaidByOther
+              ? 'Đã ghi ${formatVnd(amount)}, bạn nợ lại người trả dùm'
+              : 'Đã ghi giao dịch',
+    );
   }
 
   Future<void> _saveSplitBill(Repository repo, int total, String note) async {
@@ -435,7 +464,7 @@ class _TxEditorScreenState extends ConsumerState<TxEditorScreen> {
                   const SizedBox(height: 20),
                 ],
                 ..._buildFieldsForKind(walletList),
-                if (_kind == TxKind.expense) ...[
+                if (_kind == TxKind.expense && !_isPaidByOther) ...[
                   const SizedBox(height: 12),
                   _FundPicker(
                     value: _fundId,
@@ -448,6 +477,10 @@ class _TxEditorScreenState extends ConsumerState<TxEditorScreen> {
                     state: _bill,
                     onChanged: () => setState(() {}),
                   ),
+                ],
+                if (_canPayByOther) ...[
+                  const SizedBox(height: 8),
+                  _paidByOtherSection(),
                 ],
                 if (_canSplit) ...[
                   const SizedBox(height: 8),
@@ -521,7 +554,8 @@ class _TxEditorScreenState extends ConsumerState<TxEditorScreen> {
     final Widget note;
     if (_kind == TxKind.lend) {
       note = SpendImpactNote(amount: 0, categoryId: null, outside: total);
-    } else if (_kind != TxKind.expense || _fundId != null) {
+    } else if (_kind != TxKind.expense ||
+        (_fundId != null && !_isPaidByOther)) {
       return none;
     } else if (_canSplit && _split.enabled) {
       final mine = _split.myShareFor(total);
@@ -534,6 +568,33 @@ class _TxEditorScreenState extends ConsumerState<TxEditorScreen> {
       note = SpendImpactNote(amount: total, categoryId: _categoryId);
     }
     return Padding(padding: const EdgeInsets.only(bottom: 12), child: note);
+  }
+
+  /// Công tắc "người khác trả dùm", bật lên thì chọn người mình nợ. Nằm cạnh
+  /// công tắc chia tiền vì cả hai đều trả lời câu "ai đã trả hoá đơn này".
+  Widget _paidByOtherSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          value: _paidByOther,
+          onChanged: (v) => setState(() => _paidByOther = v),
+          title: const Text('Người khác trả dùm'),
+          subtitle: const Text(
+            'Ví không bị trừ, bạn nợ lại người đó. Chỉ ghi phần của bạn',
+          ),
+        ),
+        if (_paidByOther) ...[
+          const SizedBox(height: 4),
+          _PersonPicker(
+            label: 'Ai trả dùm',
+            value: _personId,
+            onChanged: (v) => setState(() => _personId = v),
+          ),
+        ],
+      ],
+    );
   }
 
   List<Widget> _buildFieldsForKind(List<WalletWithBalance> wallets) {
@@ -558,7 +619,8 @@ class _TxEditorScreenState extends ConsumerState<TxEditorScreen> {
           onChanged: (v) => setState(() => _walletToId = v),
         ),
       ]);
-    } else if (_kind.needsWalletFrom) {
+    } else if (_kind.needsWalletFrom && !_isPaidByOther) {
+      // Người khác trả thì không có ví nào bị trừ, nên ẩn ô chọn ví.
       widgets.add(_WalletDropdown(
         label: 'Trừ vào ví',
         icon: Icons.account_balance_wallet_outlined,
@@ -920,8 +982,13 @@ class _FundPicker extends ConsumerWidget {
 
 /// Chọn người từ danh bạ. Thêm một lần, những lần sau chỉ việc chọn.
 class _PersonPicker extends ConsumerWidget {
-  const _PersonPicker({required this.value, required this.onChanged});
+  const _PersonPicker({
+    required this.value,
+    required this.onChanged,
+    this.label = 'Với ai',
+  });
 
+  final String label;
   final int? value;
   final ValueChanged<int?> onChanged;
 
@@ -935,7 +1002,7 @@ class _PersonPicker extends ConsumerWidget {
       data: (list) => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Với ai', style: Theme.of(context).textTheme.labelLarge),
+          Text(label, style: Theme.of(context).textTheme.labelLarge),
           const SizedBox(height: 8),
           if (list.isEmpty)
             Text(
