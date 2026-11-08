@@ -1,15 +1,33 @@
 # Tự động build và phát hành
 
-Hai quy trình chạy trên GitHub Actions:
-
-| File | Chạy khi nào | Làm gì |
+| Cách | Chạy khi nào | Làm gì |
 |---|---|---|
 | `workflows/ci.yml` | Mỗi lần push lên `main` hoặc mở pull request | Phân tích tĩnh, kiểm tra mã sinh tự động còn khớp, chạy toàn bộ test |
-| `workflows/release.yml` | Khi đẩy một thẻ dạng `v1.2.3` | Chạy test, build APK đã ký, tạo bản phát hành kèm file APK |
+| `scripts/release.ps1` | Chạy tay trên máy — **cách phát hành chính** | Chạy test, build APK đã ký trên máy, kiểm chữ ký, gắn thẻ, đưa APK lên Releases |
+| `workflows/release.yml` | Chỉ khi bấm tay ở tab Actions — **dự phòng** | Như trên nhưng build trên GitHub (chậm) |
 
-## Cài đặt một lần
+## Phát hành một bản mới
 
-Workflow phát hành cần chữ ký release. Keystore **không nằm trong repo** nên
+```powershell
+.\scripts\release.ps1 v1.2.0
+```
+
+Script dừng lại trước khi đụng tới GitHub nếu: còn thay đổi chưa commit, thẻ
+đã có, test hỏng, hoặc APK bị ký bằng debug key. Cần `gh` đã đăng nhập
+(`gh auth login`). Muốn build thử mà không đẩy gì lên thì thêm `-DryRun`; đã
+chạy test rồi thì thêm `-SkipTests`.
+
+`versionCode` suy từ số phiên bản: `v1.2.3` → `10203` (minor, patch < 100).
+Workflow dự phòng dùng đúng công thức này, nên đổi qua lại giữa hai cách
+không bao giờ ra số lùi — số lùi thì điện thoại từ chối cài đè.
+
+APK nằm ở `build/release/QuanLyChiTieu-v1.2.0.apk` và ở tab **Releases** của
+repo. Tải về điện thoại rồi cài đè lên bản cũ — dữ liệu giữ nguyên.
+
+## Cài đặt một lần cho workflow dự phòng
+
+Script trên máy ký bằng `android/moneybook-release.jks` sẵn có, không cần gì
+thêm. Riêng workflow dự phòng cần chữ ký release. Keystore **không nằm trong repo** nên
 phải nạp qua GitHub Secrets.
 
 ### 1. Chuyển keystore thành chuỗi base64
@@ -40,18 +58,10 @@ Xem lại `android/key.properties` nếu quên:
 Get-Content android\key.properties
 ```
 
-## Phát hành một bản mới
+## Chạy workflow dự phòng
 
-```powershell
-git tag v1.0.1
-git push origin v1.0.1
-```
-
-Chờ vài phút, APK sẽ nằm ở tab **Releases** của repo. Tải về điện thoại rồi
-cài đè lên bản cũ — dữ liệu giữ nguyên.
-
-Muốn build thử mà chưa gắn thẻ thì vào tab **Actions** → **Phát hành** →
-**Run workflow** và gõ số phiên bản.
+Tab **Actions** → **Phát hành** → **Run workflow**, gõ số phiên bản. Đừng
+đẩy thẻ bằng tay rồi chờ — workflow không còn chạy theo thẻ nữa.
 
 ## Vì sao phải ký đúng keystore
 
@@ -59,7 +69,7 @@ Android chỉ cho cài đè khi chữ ký trùng với bản đã cài. Ký bằ
 điện thoại báo "App not installed", buộc phải gỡ app ra cài lại — **mất toàn bộ
 dữ liệu chi tiêu**.
 
-Workflow có một bước kiểm tra chữ ký sau khi build: nếu vì lý do gì đó APK bị ký
+Cả script lẫn workflow đều có bước kiểm tra chữ ký sau khi build: nếu vì lý do gì đó APK bị ký
 bằng debug key, nó dừng lại và báo lỗi thay vì phát hành một bản không cài được.
 
 ## Giữ keystore ở đâu
