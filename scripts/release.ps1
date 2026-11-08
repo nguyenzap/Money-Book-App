@@ -63,6 +63,14 @@ if (-not $DryRun) {
     $dirty = git status --porcelain --untracked-files=no
     if ($dirty) { Fail "Còn thay đổi chưa commit, bản phát hành sẽ không khớp với thẻ:`n$dirty" }
 
+    # Bản phát hành phải nằm trên main ở GitHub, không thì thẻ trỏ vào một
+    # commit mà main không có (lỡ chạy trên nhánh khác, hoặc quên push).
+    Run git @('fetch', '--quiet', 'origin', 'main')
+    & git merge-base --is-ancestor HEAD origin/main
+    if ($LASTEXITCODE -ne 0) {
+        Fail 'Commit hiện tại chưa nằm trên origin/main. Merge / push lên main trước rồi chạy lại'
+    }
+
     if (git tag --list $Version) { Fail "Thẻ $Version đã có trên máy" }
     $remoteTag = git ls-remote --tags origin "refs/tags/$Version"
     if ($remoteTag) { Fail "Thẻ $Version đã có trên GitHub" }
