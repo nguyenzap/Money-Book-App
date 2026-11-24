@@ -1,0 +1,11 @@
+# expect: income 10000 at=2026-11-23T19:31 balance=3202202 account=1234 receiver="TKThe :xxxxxx0145, tai Eximbank. NGUYEN VAN A chuyen tien -CTLNHIDIxxxxxxxxxxxxx038-1/1-CRE-002" ref=0831DtnK-8DpfzFz6q
+# title: Thông báo BIDV
+# Thông báo đẩy thật 2026-11-23 (chuyển từ Eximbank sang). Số tài khoản, tên
+# người và mã ngân hàng đã thay. Không có dòng "BIDV xin thông báo...": tiêu đề
+# "Thông báo BIDV" mới là dòng đầu.
+Thời gian giao dịch: 19:31 23/11/2026
+Tài khoản thanh toán: xxxxxx1234
+Số tiền GD: +10,000 VND
+Số dư cuối: 3,202,202 VND
+Nội dung giao dịch: TKThe :xxxxxx0145, tai Eximbank. NGUYEN VAN A chuyen tien -CTLNHIDIxxxxxxxxxxxxx038-1/1-CRE-002
+Mã giao dịch: 0831DtnK-8DpfzFz6q

@@ -1,0 +1,9 @@
+# expect: expense 80000 at=2026-11-21T18:57 balance=2702202
+# Mẫu thật 2026-11, số tài khoản / nội dung / mã đã xoá khi chia sẻ.
+BIDV xin thông báo tới Quý khách
+Thời gian giao dịch: 18:57 21/11/2026
+Tài khoản thanh toán: 
+Số tiền GD: -80,000 VND
+Số dư cuối: 2,702,202 VND
+Nội dung giao dịch:
+Mã giao dịch: 

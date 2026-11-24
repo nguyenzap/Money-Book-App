@@ -7,7 +7,7 @@ trong máy, không server, không tài khoản.
 
 ```powershell
 flutter run -d <device>                 # dev, hot reload bằng phím r
-flutter test                            # 304 test, chạy trong ~10 giây
+flutter test                            # ~400 test, chạy trong ~10 giây
 flutter analyze
 dart run build_runner build             # BẮT BUỘC sau khi sửa lib/core/db/tables.dart
 flutter build apk --release --target-platform android-arm64
@@ -230,6 +230,67 @@ Khi nhập, id trong file được ánh xạ sang id mới chứ không dùng l�
 gần như chắc chắn đụng id. `dayKey`/`monthKey`/`debtDelta` tính lại từ dữ liệu
 gốc chứ không tin file, phòng bản sao lưu đến từ máy khác múi giờ. Toàn bộ chạy
 trong một `db.transaction()`.
+
+## Tự động ghi từ thông báo ngân hàng
+
+Kế hoạch đầy đủ: `finance-app-plan.md`. Đọc thông báo của app BIDV và Eximbank,
+ghi thành giao dịch qua đúng `Repository.addTransaction` như nhập tay, rồi
+phân loại trong máy. Không mạng, không quyền `INTERNET`.
+
+**Đường đi:** `AutoTrackListenerService.kt` (lọc theo gói ở dòng đầu, chỉ chép
+chữ vào hộp thư SQLite riêng phía Android) → MethodChannel `moneybook/autotrack`
+→ `AutoTrackService.sync()` (chạy khi mở app, khi quay lại từ nền, khi có tin
+lúc app đang mở) → `notification_events` → parser → `addTransaction`. Kotlin
+không bao giờ ghi vào DB của Drift, không chạy Flutter ngầm, không foreground
+service. Hộp thư Android chỉ được xoá (`ackInbox`) SAU khi Dart đã lưu xong.
+
+**Parser viết tay trong mã nguồn** (`lib/core/domain/autotrack/parsers/`), mỗi
+ngân hàng một lớp `LabeledLinesParser`: dòng đầu khớp `header` VÀ có dòng số
+tiền thì mới là giao dịch, OTP/khuyến mãi tự rơi vào `unmatched`. Nhãn và dòng
+đầu so ở dạng `foldVi` (không dấu) vì Dart không có NFC. Số tiền qua
+`parseVnd`, bắt buộc có dấu `+`/`-`, không bao giờ qua `double`. Thông báo đẩy
+thật của BIDV có tiêu đề `Thông báo BIDV` (chính là dòng đầu); Eximbank có
+dòng đầu `Eximbank <chi nhánh>: dd/MM/yyyy HH:mm` trong thân.
+
+Ngân hàng đổi câu chữ: chép tin "đã che" ở Nhật ký thông báo, thêm vào
+`test/fixtures/autotrack/<id>/` (dòng `# expect:`, `# title:`), sửa parser,
+**tăng `version`**, phát hành. Tin `unmatched`/`failed` được giữ 30 ngày và
+đọc lại tự động khi `parserVersion` cũ hơn. Mẫu thật trong fixtures phải che
+số tài khoản và thay tên người.
+
+**Chống trùng hai lớp:** `dedupeHash` trên tin thô (gói + chữ + phút), rồi
+`txnKey` trên giao dịch đọc được (ngân hàng + mã giao dịch, hoặc thời gian +
+số tiền + số dư).
+
+**Ví:** mỗi ngân hàng một ví mặc định, ghi đè theo đuôi số tài khoản
+(`account_wallets`). Chưa có ví thì tin nằm `unmapped`, chọn ví xong lần đồng
+bộ sau tự ghi. Chuyển giữa hai tài khoản của mình KHÔNG ghép thành chuyển ví
+(quyết định D7): số dư từng ví vẫn đúng, nhưng thống kê tháng đếm cả hai vế.
+
+**Phân loại** (`categorizer.dart`, hàm thuần): người nhận chuẩn hoá bằng
+`normalizeReceiver` → quy tắc đúng tên (tin được, `needsReview` false) → tên
+gần giống → từ khoá (hai bước sau chỉ là đoán, luôn chờ xác nhận) → không có
+(`categoryId` null = "Chưa phân loại", KHÔNG tạo danh mục riêng). Quy tắc tách
+theo `flow`. Chọn danh mục cho khoản chưa phân loại / đang đoán thì học và áp
+cho các khoản cùng người nhận (`AutoTrackRepository.learn`, có `undoLearn`);
+đổi khoản đã theo quy tắc thì hỏi "Chỉ giao dịch này / Luôn dùng".
+`updateTransaction` luôn đặt `needsReview` = false: lưu ở màn sửa là đã xem.
+
+**Sức khoẻ** (`autotrack_health.dart`, banner ở Tổng quan): mất quyền đọc
+thông báo; lệch số dư (so số dư trong tin ghi gần nhất với
+`balanceOf(asOf: lúc đó)` — vẫn đúng một công thức); tin có số tiền +/- mà
+không đọc được (nghi đổi mẫu); im lặng quá 3 ngày.
+
+**Sao lưu v6:** mang theo `trackedApps` (chỉ ngân hàng, không app ghi mẫu),
+`accountWallets`, `receiverRules`, `categoryKeywords`, `needsReview`. KHÔNG
+bao giờ xuất `notification_events` (số tài khoản, số dư, OTP); vì vậy giao
+dịch khôi phục mất `autoEventId`.
+
+**Thử trên máy:** ngân hàng tắt app khi bật Tuỳ chọn nhà phát triển, nên
+không dùng được `flutter run`/adb. Build `--debug` (id `.dev`, tên "Chi Tiêu
+(dev)", cài song song bản thật) rồi cài APK bằng tay. Android 13+ chặn quyền
+đọc thông báo cho app cài từ APK: Cài đặt → Ứng dụng → app → ⋮ → Cho phép
+cài đặt bị hạn chế.
 
 ## Chưa làm
 

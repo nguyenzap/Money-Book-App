@@ -3,6 +3,7 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:moneybook/core/db/database.dart';
 import 'package:moneybook/core/db/repository.dart';
+import 'package:moneybook/core/domain/tx_kind.dart';
 import 'package:sqlite3/sqlite3.dart';
 
 /// Đây là migration đầu tiên của app, chạy trên máy đã có dữ liệu thật. Sai ở
@@ -166,7 +167,7 @@ void main() {
 
     test('migration chạy được và lên đúng phiên bản', () async {
       final row = await db.customSelect('PRAGMA user_version').getSingle();
-      expect(row.data.values.first, 5);
+      expect(row.data.values.first, 6);
     });
 
     test('bảng mẫu chi tiêu đã có và dùng được ngay', () async {
@@ -240,6 +241,62 @@ void main() {
         await repo.watchTotalAssets().first,
         reason: 'chưa có quỹ thì tiêu được bằng đúng tổng tài sản',
       );
+    });
+
+    test('bảng tự động ghi đã có, giao dịch cũ là nhập tay', () async {
+      final all = await db.select(db.transactions).get();
+      expect(all, hasLength(2));
+      expect(all.every((t) => t.autoEventId == null && !t.needsReview), isTrue);
+
+      final eventId = await db.into(db.notificationEvents).insert(
+        NotificationEventsCompanion.insert(
+          packageName: 'com.vnpay.bidv',
+          body: 'BIDV xin thông báo tới Quý khách',
+          postedAt: 0,
+          dedupeHash: 'h1',
+          createdAt: 0,
+        ),
+      );
+      await db.into(db.trackedApps).insert(
+        TrackedAppsCompanion.insert(
+          packageName: 'com.vnpay.bidv',
+          parserId: const Value('bidv'),
+          defaultWalletId: const Value(2),
+          createdAt: 0,
+          updatedAt: 0,
+        ),
+      );
+      await db.into(db.accountWallets).insert(
+        AccountWalletsCompanion.insert(
+          packageName: 'com.vnpay.bidv',
+          accountSuffix: '1234',
+          walletId: 1,
+        ),
+      );
+      await db.into(db.receiverRules).insert(
+        ReceiverRulesCompanion.insert(
+          matchType: 'name',
+          matchKey: 'PHUC LONG',
+          flow: 'expense',
+          displayName: 'Phúc Long',
+          categoryId: 1,
+          createdAt: 0,
+          updatedAt: 0,
+        ),
+      );
+      final id = await repo.addTransaction(
+        kind: TxKind.expense,
+        amount: 80000,
+        occurredAt: DateTime(2026, 11, 21, 18, 57),
+        walletFromId: 2,
+        autoEventId: eventId,
+        needsReview: true,
+      );
+      final tx = await (db.select(db.transactions)
+            ..where((t) => t.id.equals(id)))
+          .getSingle();
+      expect(tx.autoEventId, eventId);
+      expect(tx.needsReview, isTrue);
     });
 
     test('chạy lại migration lần nữa không hỏng gì', () async {
@@ -342,7 +399,7 @@ void main() {
       await db.customStatement('SELECT 1');
 
       final row = await db.customSelect('PRAGMA user_version').getSingle();
-      expect(row.data.values.first, 5);
+      expect(row.data.values.first, 6);
       expect(await repo.watchFunds().first, isEmpty);
       expect(await repo.watchTemplates().first, isEmpty);
       expect(await repo.watchTotalInFunds().first, 0);

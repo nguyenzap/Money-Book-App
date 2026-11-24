@@ -10,10 +10,13 @@ import '../../core/widgets.dart';
 ///
 /// Không ghi đè số dư mà tạo một giao dịch chênh lệch, để lịch sử vẫn giải
 /// thích được vì sao con số nhảy.
+///
+/// [suggested]: số dư thực tế điền sẵn (ví dụ số ngân hàng vừa báo).
 Future<void> showAdjustBalanceSheet(
   BuildContext context,
-  WalletWithBalance wallet,
-) {
+  WalletWithBalance wallet, {
+  int? suggested,
+}) {
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
@@ -21,15 +24,16 @@ Future<void> showAdjustBalanceSheet(
       padding: EdgeInsets.only(
         bottom: MediaQuery.of(context).viewInsets.bottom,
       ),
-      child: _AdjustBalanceSheet(wallet: wallet),
+      child: _AdjustBalanceSheet(wallet: wallet, suggested: suggested),
     ),
   );
 }
 
 class _AdjustBalanceSheet extends ConsumerStatefulWidget {
-  const _AdjustBalanceSheet({required this.wallet});
+  const _AdjustBalanceSheet({required this.wallet, this.suggested});
 
   final WalletWithBalance wallet;
+  final int? suggested;
 
   @override
   ConsumerState<_AdjustBalanceSheet> createState() =>
@@ -43,7 +47,7 @@ class _AdjustBalanceSheetState extends ConsumerState<_AdjustBalanceSheet> {
   @override
   void initState() {
     super.initState();
-    _newBalance = widget.wallet.balance;
+    _newBalance = widget.suggested ?? widget.wallet.balance;
     _controller = TextEditingController(text: groupDigits(_newBalance));
   }
 

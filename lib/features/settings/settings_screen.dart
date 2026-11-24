@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../autotrack/autotrack_settings_screen.dart';
 import '../backup/backup_screen.dart';
 import '../budgets/budget_screen.dart';
 import '../funds/fund_screen.dart';
@@ -77,6 +78,18 @@ class SettingsScreen extends ConsumerWidget {
             onTap: () => Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => const BudgetScreen()),
+            ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.notifications_active_outlined),
+            title: const Text('Tự động ghi'),
+            subtitle: const Text('Ghi giao dịch từ thông báo ngân hàng'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const AutoTrackSettingsScreen(),
+              ),
             ),
           ),
           const Divider(),

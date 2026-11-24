@@ -12,6 +12,9 @@ import '../../core/widgets.dart';
 import '../categories/category_edit_screen.dart';
 import '../people/person_edit_screen.dart';
 import 'bill_section.dart';
+import '../../core/db/autotrack_repository.dart';
+import '../autotrack/autotrack_providers.dart';
+import '../autotrack/categorize_actions.dart';
 import 'spend_impact_note.dart';
 import 'split_bill_section.dart';
 
@@ -333,7 +336,9 @@ class _TxEditorScreenState extends ConsumerState<TxEditorScreen> {
       return;
     }
 
+    LearnResult? learned;
     if (_isEditing) {
+      final before = widget.editing!.tx;
       await repo.updateTransaction(
         id: widget.editing!.tx.id,
         kind: _kind,
@@ -347,6 +352,18 @@ class _TxEditorScreenState extends ConsumerState<TxEditorScreen> {
         note: note.isEmpty ? null : note,
         bill: bill,
       );
+      // Giao dịch tự ghi đổi danh mục: nhớ người nhận này cho lần sau.
+      if (before.autoEventId != null &&
+          _categoryId != null &&
+          _categoryId != before.categoryId &&
+          mounted) {
+        learned = await learnFromEdit(
+          context,
+          ref,
+          transactionId: before.id,
+          categoryId: _categoryId!,
+        );
+      }
     } else {
       await repo.addTransaction(
         kind: _kind,
@@ -364,6 +381,20 @@ class _TxEditorScreenState extends ConsumerState<TxEditorScreen> {
 
     if (!mounted) return;
     Navigator.pop(context);
+    if (learned != null && learned.appliedToOthers > 0) {
+      final auto = ref.read(autoTrackRepositoryProvider);
+      final result = learned;
+      showSnack(
+        context,
+        'Đã cập nhật, phân loại thêm ${result.appliedToOthers} giao dịch của '
+        '${result.receiverName}',
+        action: SnackBarAction(
+          label: 'Hoàn tác',
+          onPressed: () => auto.undoLearn(result),
+        ),
+      );
+      return;
+    }
     showSnack(
       context,
       _isEditing

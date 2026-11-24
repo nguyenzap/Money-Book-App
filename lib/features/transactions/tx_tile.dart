@@ -30,12 +30,37 @@ class TxTile extends StatelessWidget {
         overflow: TextOverflow.ellipsis,
         style: const TextStyle(fontWeight: FontWeight.w500),
       ),
-      subtitle: Text(
-        [
-          if (view.subtitle.isNotEmpty) view.subtitle,
-          if (view.hasBill) '${view.billCount} món',
-          formatTime(DateTime.fromMillisecondsSinceEpoch(view.tx.occurredAt)),
-        ].join(' · '),
+      subtitle: Text.rich(
+        TextSpan(
+          children: [
+            // Tự ghi từ thông báo ngân hàng.
+            if (view.tx.autoEventId != null)
+              WidgetSpan(
+                alignment: PlaceholderAlignment.middle,
+                child: Padding(
+                  padding: const EdgeInsets.only(right: 4),
+                  child: Icon(
+                    view.tx.needsReview
+                        ? Icons.bolt
+                        : Icons.bolt_outlined,
+                    size: 14,
+                    color: view.tx.needsReview
+                        ? scheme.tertiary
+                        : scheme.outline,
+                  ),
+                ),
+              ),
+            TextSpan(
+              text: [
+                if (view.subtitle.isNotEmpty) view.subtitle,
+                if (view.hasBill) '${view.billCount} món',
+                formatTime(
+                  DateTime.fromMillisecondsSinceEpoch(view.tx.occurredAt),
+                ),
+              ].join(' · '),
+            ),
+          ],
+        ),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: TextStyle(color: scheme.outline, fontSize: 12.5),

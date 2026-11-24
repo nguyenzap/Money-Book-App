@@ -24,6 +24,11 @@ part 'database.g.dart';
     ExpenseTemplates,
     BillItems,
     SettingsKv,
+    TrackedApps,
+    AccountWallets,
+    NotificationEvents,
+    ReceiverRules,
+    CategoryKeywords,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -33,7 +38,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.e);
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 6;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -87,6 +92,20 @@ class AppDatabase extends _$AppDatabase {
               'CREATE INDEX IF NOT EXISTS ix_bill_tx ON bill_items(transaction_id)',
             );
           }
+          // v6: tự động ghi từ thông báo ngân hàng. Giao dịch cũ đều là nhập
+          // tay: auto_event_id null, needs_review false.
+          if (from < 6) {
+            await m.createTable(notificationEvents);
+            await m.createTable(trackedApps);
+            await m.createTable(accountWallets);
+            await m.createTable(receiverRules);
+            await m.createTable(categoryKeywords);
+            await m.addColumn(transactions, transactions.autoEventId);
+            await m.addColumn(transactions, transactions.needsReview);
+            for (final sql in _autotrackIndexes) {
+              await customStatement(sql);
+            }
+          }
         },
         beforeOpen: (details) async {
           // SQLite mặc định TẮT ràng buộc khoá ngoại. Không bật thì mọi
@@ -120,11 +139,22 @@ class AppDatabase extends _$AppDatabase {
       'CREATE INDEX IF NOT EXISTS ix_bill_tx ON bill_items(transaction_id)',
       'CREATE INDEX IF NOT EXISTS ix_recurring_due ON recurring_templates(is_active, next_due_at)',
       'CREATE UNIQUE INDEX IF NOT EXISTS ux_budget ON budgets(category_id, month_key)',
+      ..._autotrackIndexes,
     ];
     for (final sql in statements) {
       await customStatement(sql);
     }
   }
+
+  static const _autotrackIndexes = [
+    'CREATE INDEX IF NOT EXISTS ix_tx_auto_event ON transactions(auto_event_id) '
+        'WHERE auto_event_id IS NOT NULL',
+    'CREATE INDEX IF NOT EXISTS ix_tx_review ON transactions(needs_review) '
+        'WHERE needs_review = 1 AND deleted_at IS NULL',
+    'CREATE INDEX IF NOT EXISTS ix_events_status ON notification_events(status, posted_at)',
+    'CREATE INDEX IF NOT EXISTS ix_events_txn_key ON notification_events(txn_key)',
+    'CREATE INDEX IF NOT EXISTS ix_events_receiver ON notification_events(receiver_key)',
+  ];
 
   /// Gieo sẵn một ít dữ liệu để màn hình đầu tiên không trống trơn.
   /// Tất cả đều sửa và xoá được.

@@ -42,6 +42,7 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        manifestPlaceholders["appLabel"] = "Quản Lý Chi Tiêu"
     }
 
     signingConfigs {
@@ -56,6 +57,13 @@ android {
     }
 
     buildTypes {
+        // Bản debug là một app RIÊNG (id có đuôi .dev), cài song song với bản
+        // thật. Cùng id mà khác chữ ký thì `flutter run` sẽ gỡ app thật để cài
+        // lại — mất toàn bộ dữ liệu chi tiêu.
+        debug {
+            applicationIdSuffix = ".dev"
+            manifestPlaceholders["appLabel"] = "Chi Tiêu (dev)"
+        }
         release {
             signingConfig = if (keystorePropertiesFile.exists()) {
                 signingConfigs.getByName("release")

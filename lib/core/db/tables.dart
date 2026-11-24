@@ -181,6 +181,17 @@ class Transactions extends Table {
   /// đụng tới, nhưng công nợ vẫn về 0.
   BoolColumn get isWriteoff => boolean().withDefault(const Constant(false))();
 
+  /// Thông báo ngân hàng đã sinh ra giao dịch này. Null = nhập tay.
+  IntColumn get autoEventId => integer().nullable().references(
+    NotificationEvents,
+    #id,
+    onDelete: KeyAction.setNull,
+  )();
+
+  /// Giao dịch tự ghi còn chờ mình xem lại (chưa phân loại, phân loại đoán).
+  /// Không ảnh hưởng số dư hay thống kê.
+  BoolColumn get needsReview => boolean().withDefault(const Constant(false))();
+
   IntColumn get createdAt => integer()();
   IntColumn get updatedAt => integer()();
 
@@ -265,4 +276,138 @@ class Funds extends Table {
   IntColumn get sortOrder => integer().withDefault(const Constant(0))();
   IntColumn get createdAt => integer()();
   IntColumn get updatedAt => integer()();
+}
+
+// ---------------------------------------------------------------------------
+// Tự động ghi từ thông báo ngân hàng. Xem finance-app-plan.md.
+// ---------------------------------------------------------------------------
+
+/// Ứng dụng mà app nghe thông báo.
+///
+/// Có [parserId]: app ngân hàng được hỗ trợ, thông báo được đọc thành giao
+/// dịch. Không có: chế độ "ghi mẫu", chỉ lưu thông báo thô tới [captureUntil]
+/// để viết parser cho ngân hàng mới.
+class TrackedApps extends Table {
+  TextColumn get packageName => text()();
+  TextColumn get parserId => text().nullable()();
+
+  /// Tên app lúc chọn, để hiển thị khi app đã bị gỡ.
+  TextColumn get label => text().nullable()();
+  BoolColumn get enabled => boolean().withDefault(const Constant(true))();
+
+  /// Ví nhận mọi giao dịch của app này, trừ khi số tài khoản có ví riêng
+  /// trong [AccountWallets].
+  IntColumn get defaultWalletId => integer().nullable().references(
+    Wallets,
+    #id,
+    onDelete: KeyAction.setNull,
+  )();
+
+  IntColumn get captureUntil => integer().nullable()();
+  IntColumn get createdAt => integer()();
+  IntColumn get updatedAt => integer()();
+
+  @override
+  Set<Column> get primaryKey => {packageName};
+}
+
+/// Một ngân hàng có nhiều tài khoản: số đuôi tài khoản nào vào ví nào.
+class AccountWallets extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get packageName => text().references(
+    TrackedApps,
+    #packageName,
+    onDelete: KeyAction.cascade,
+  )();
+  TextColumn get accountSuffix => text()();
+  IntColumn get walletId =>
+      integer().references(Wallets, #id, onDelete: KeyAction.cascade)();
+
+  @override
+  List<Set<Column>> get uniqueKeys => [
+    {packageName, accountSuffix},
+  ];
+}
+
+/// Thông báo thô nhận từ ứng dụng đang nghe.
+///
+/// Chứa số tài khoản và số dư nên KHÔNG bao giờ được xuất ra file sao lưu.
+/// Tin không đọc thành giao dịch (`unmatched`, `captured`) bị dọn sau một
+/// thời gian.
+class NotificationEvents extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get packageName => text()();
+  TextColumn get title => text().withDefault(const Constant(''))();
+  TextColumn get body => text()();
+
+  /// Lúc thông báo đến máy, epoch millis.
+  IntColumn get postedAt => integer()();
+
+  /// Chống ghi trùng tin thô: gói + nội dung + phút đến. Xem `eventDedupeHash`.
+  TextColumn get dedupeHash => text().unique()();
+
+  /// new | parsed | unmatched | failed | unmapped | captured | duplicate
+  TextColumn get status => text().withDefault(const Constant('new'))();
+
+  /// Lý do không ghi được, cho màn nhật ký.
+  TextColumn get statusReason => text().nullable()();
+
+  TextColumn get parserId => text().nullable()();
+  IntColumn get parserVersion => integer().nullable()();
+
+  /// Khoá của GIAO DỊCH đọc được (ngân hàng + mã giao dịch, hoặc thời gian +
+  /// số tiền + số dư). Hai tin khác chữ nhưng cùng khoá là một giao dịch.
+  TextColumn get txnKey => text().nullable()();
+
+  /// Người nhận đã chuẩn hoá, để gom nhóm và học phân loại.
+  TextColumn get receiverKey => text().nullable()();
+
+  /// account | name | similar | keyword | user — vì sao có danh mục này.
+  TextColumn get categorySource => text().nullable()();
+
+  IntColumn get createdAt => integer()();
+}
+
+/// Người nhận nào thuộc danh mục nào, học từ những lần mình tự phân loại.
+class ReceiverRules extends Table {
+  IntColumn get id => integer().autoIncrement()();
+
+  /// account | name
+  TextColumn get matchType => text()();
+  TextColumn get matchKey => text()();
+
+  /// expense | income — cùng một người có thể vừa nhận vừa gửi tiền.
+  TextColumn get flow => text()();
+
+  /// Tên người nhận như lần gần nhất thấy, để hiển thị.
+  TextColumn get displayName => text()();
+  IntColumn get categoryId =>
+      integer().references(Categories, #id, onDelete: KeyAction.cascade)();
+  IntColumn get hitCount => integer().withDefault(const Constant(0))();
+  IntColumn get lastUsedAt => integer().nullable()();
+  IntColumn get createdAt => integer()();
+  IntColumn get updatedAt => integer()();
+
+  @override
+  List<Set<Column>> get uniqueKeys => [
+    {matchType, matchKey, flow},
+  ];
+}
+
+/// Từ khoá gợi ý danh mục (CAFE → Ăn uống) cho người nhận chưa có quy tắc.
+class CategoryKeywords extends Table {
+  IntColumn get id => integer().autoIncrement()();
+
+  /// Đã chuẩn hoá: chữ hoa, không dấu.
+  TextColumn get keyword => text()();
+  IntColumn get categoryId =>
+      integer().references(Categories, #id, onDelete: KeyAction.cascade)();
+  BoolColumn get isBuiltIn => boolean().withDefault(const Constant(false))();
+  BoolColumn get enabled => boolean().withDefault(const Constant(true))();
+  IntColumn get createdAt => integer()();
+
+  @override
+  List<Set<Column>> get uniqueKeys => [
+    {keyword, categoryId},
+  ];
 }

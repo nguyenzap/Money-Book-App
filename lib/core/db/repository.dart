@@ -259,20 +259,27 @@ class Repository {
         .map((row) => row.read<int>('total'));
   }
 
-  Future<int> balanceOf(int walletId) async {
+  /// Số dư hiện tại, hoặc số dư tính tới hết thời điểm [asOf] (để đối chiếu
+  /// với số dư ngân hàng báo trong một thông báo cũ). Vẫn đúng một công thức.
+  Future<int> balanceOf(int walletId, {DateTime? asOf}) async {
+    final until = asOf == null ? '' : ' AND t.occurred_at <= ?';
     final row = await db
         .customSelect(
           '''
       SELECT (
         w.initial_balance
         + COALESCE((SELECT SUM(t.amount) FROM transactions t
-                    WHERE t.wallet_to_id = w.id AND t.deleted_at IS NULL), 0)
+                    WHERE t.wallet_to_id = w.id AND t.deleted_at IS NULL$until), 0)
         - COALESCE((SELECT SUM(t.amount) FROM transactions t
-                    WHERE t.wallet_from_id = w.id AND t.deleted_at IS NULL), 0)
+                    WHERE t.wallet_from_id = w.id AND t.deleted_at IS NULL$until), 0)
       ) AS balance
       FROM wallets w WHERE w.id = ?
       ''',
-          variables: [Variable.withInt(walletId)],
+          variables: [
+            if (asOf != null) Variable.withInt(asOf.millisecondsSinceEpoch),
+            if (asOf != null) Variable.withInt(asOf.millisecondsSinceEpoch),
+            Variable.withInt(walletId),
+          ],
           readsFrom: {db.wallets, db.transactions},
         )
         .getSingleOrNull();
@@ -1031,6 +1038,8 @@ class Repository {
     int? recurringId,
     bool isWriteoff = false,
     List<BillLine> bill = const [],
+    int? autoEventId,
+    bool needsReview = false,
   }) async {
     assert(amount > 0, 'amount phải dương, dấu suy ra từ kind');
     _checkBill(amount, bill);
@@ -1066,6 +1075,8 @@ class Repository {
               groupId: Value(groupId),
               recurringId: Value(recurringId),
               isWriteoff: Value(isWriteoff),
+              autoEventId: Value(autoEventId),
+              needsReview: Value(needsReview),
               createdAt: now,
               updatedAt: now,
             ),
@@ -1181,6 +1192,8 @@ class Repository {
           fundDelta: Value(fundDelta),
           debtDelta: Value(kind.debtDelta(amount, hasPerson: personId != null)),
           note: Value(note),
+          // Mở ra sửa rồi bấm lưu tức là đã xem lại.
+          needsReview: const Value(false),
           updatedAt: Value(_now()),
         ),
       );

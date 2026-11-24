@@ -1,0 +1,8 @@
+# expect: income 5000000 at=2026-11-16T08:45 balance=7612762
+# Mẫu thật 2026-11, số tài khoản / nội dung / mã đã xoá khi chia sẻ.
+Eximbank Mỹ Tho: 16/11/2026 08:45
+Tài khoản: 
+Giao dịch: +5,000,000 VND
+Số dư: 7,612,762 VND
+Nội dung:  
+Số tham chiếu: 

@@ -1,0 +1,10 @@
+# expect: expense 10000 at=2026-11-23T19:31 balance=50000 account=0145 receiver="NGUYEN VAN A chuyen tien" ref=AB3392856
+# title: Thông báo Eximbank
+# Thông báo đẩy thật 2026-11-23 (chuyển sang BIDV). Số tài khoản và tên người
+# đã thay. Tiêu đề không phải dòng đầu; dòng đầu nằm trong thân.
+Eximbank Mỹ Tho: 23/11/2026 19:31
+Tài khoản: xxxxxx0145
+Giao dịch: -10,000 VND
+Số dư: 50,000 VND
+Nội dung: NGUYEN VAN A chuyen tien
+Số tham chiếu: AB3392856

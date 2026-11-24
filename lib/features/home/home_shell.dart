@@ -1,7 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/providers.dart';
+import '../../core/widgets.dart';
+import '../autotrack/autotrack_providers.dart';
 
 import '../debts/debt_book_screen.dart';
 import '../stats/stats_screen.dart';
@@ -22,19 +26,48 @@ class _HomeShellState extends ConsumerState<HomeShell> {
   // Mở lại app vào sáng hôm sau thì mọi con số "hôm nay" phải sang ngày mới
   // ngay, không đợi Timer — Timer có thể đứng suốt lúc máy ngủ.
   late final _lifecycle = AppLifecycleListener(
-    onResume: () => ref.read(todayProvider.notifier).refresh(),
+    onResume: () {
+      ref.read(todayProvider.notifier).refresh();
+      _syncAutoTrack();
+    },
   );
+
+  StreamSubscription<void>? _newNotifications;
 
   @override
   void initState() {
     super.initState();
     _lifecycle;
+    _syncAutoTrack();
+    // Có thông báo ngân hàng mới lúc app đang mở thì ghi ngay.
+    _newNotifications = ref
+        .read(autoTrackPlatformProvider)
+        .newItems
+        .listen((_) => _syncAutoTrack(), onError: (_) {});
   }
 
   @override
   void dispose() {
+    _newNotifications?.cancel();
     _lifecycle.dispose();
     super.dispose();
+  }
+
+  /// Lấy thông báo ngân hàng đã nhận lúc app đóng và ghi thành giao dịch.
+  Future<void> _syncAutoTrack() async {
+    try {
+      final service = ref.read(autoTrackServiceProvider);
+      final report = await service.sync();
+      if (!mounted) return;
+      // Kiểm tra lại quyền, số dư, mẫu thông báo sau mỗi lần đồng bộ.
+      ref.read(autoTrackHealthTickProvider.notifier).state++;
+      if (report.created == 0) return;
+      showSnack(context, 'Đã tự ghi ${report.created} giao dịch từ ngân hàng');
+    } catch (e) {
+      // Không có phần Android (chạy test, máy không hỗ trợ): bỏ qua, app
+      // vẫn dùng bình thường.
+      debugPrint('autotrack sync: $e');
+    }
   }
 
   static const _tabs = [
