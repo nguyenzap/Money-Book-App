@@ -86,6 +86,18 @@ class TxForm {
   /// Ô "Lấy từ quỹ": người khác trả thì tiền không qua quỹ nào của mình.
   bool get showsFundPicker => kind.canUseFund && !isPaidByOther;
 
+  /// Thanh chọn loại giao dịch: ẩn khi đang ghi/sửa khoản "Ghi nợ" (người
+  /// khác trả dùm, loại luôn là chi tiêu).
+  bool get showsKindSelector => !isPaidByOther;
+
+  /// Ô chọn người: các loại nợ hoặc khoản chi do người khác trả dùm.
+  bool get showsPersonPicker => kind.needsPerson || isPaidByOther;
+
+  /// Tiêu đề thanh trên cùng của màn hình ghi/sửa giao dịch.
+  String get title => isPaidByOther
+      ? 'Ghi nợ'
+      : (isEditing ? 'Sửa giao dịch' : 'Ghi giao dịch');
+
   /// Đổi loại giao dịch thì phải dọn những trường không còn ý nghĩa, nếu không
   /// sẽ ghi xuống DB một danh mục hoặc một người chẳng liên quan gì.
   ///

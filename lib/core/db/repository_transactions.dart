@@ -53,25 +53,75 @@ extension TransactionQueries on Repository {
       ${limit != null ? 'LIMIT $limit' : ''}
     ''';
 
-    return db
-        .customSelect(
-          sql,
-          variables: vars,
-          readsFrom: _txViewTables,
-        )
-        .watch()
-        .map((rows) => rows.map(_rowToTxView).toList());
+    final query = db.customSelect(
+      sql,
+      variables: vars,
+      readsFrom: _txViewTables,
+    );
+
+    // Khi không có bộ lọc cắt bớt lịch sử của một người (toàn bộ giao dịch,
+    // hoặc toàn bộ giao dịch của một người), kết quả đã đủ mọi dòng nợ của
+    // từng người nên phân bổ thẳng trong bộ nhớ mà không cần truy vấn thêm.
+    final hasFullPersonHistory = limit == null &&
+        walletId == null &&
+        categoryId == null &&
+        !uncategorized &&
+        monthKey == null &&
+        kind == null;
+
+    if (hasFullPersonHistory) {
+      return query.watch().map((rows) {
+        final txs = [for (final row in rows) db.transactions.map(row.data)];
+        final remaining = _allocateGroupedByPerson(txs);
+        return [
+          for (var i = 0; i < rows.length; i++)
+            _rowToTxView(rows[i], debtRemaining: remaining[txs[i].id]),
+        ];
+      });
+    }
+
+    return query.watch().asyncMap((rows) async {
+      final txs = [for (final row in rows) db.transactions.map(row.data)];
+      final personIds = <int>{
+        for (final tx in txs)
+          if (tx.personId != null &&
+              tx.debtDelta != 0 &&
+              tx.settlesTxId == null)
+            tx.personId!,
+      };
+      final remaining = await _allocateDebtsForPeople(personIds);
+      return [
+        for (var i = 0; i < rows.length; i++)
+          _rowToTxView(rows[i], debtRemaining: remaining[txs[i].id]),
+      ];
+    });
   }
 
   /// Một giao dịch theo id, kể cả đã xoá mềm. Null nếu không có.
-  Future<TxView?> getTransaction(int id) => _txByIdQuery(id)
-      .getSingleOrNull()
-      .then((row) => row == null ? null : _rowToTxView(row));
+  Future<TxView?> getTransaction(int id) async {
+    final row = await _txByIdQuery(id).getSingleOrNull();
+    if (row == null) return null;
+    return _rowToTxViewWithDebt(row);
+  }
 
   /// Một giao dịch, phát lại khi nó (hoặc ví, danh mục, người của nó) đổi.
   Stream<TxView?> watchTransactionById(int id) => _txByIdQuery(id)
       .watchSingleOrNull()
-      .map((row) => row == null ? null : _rowToTxView(row));
+      .asyncMap(
+        (row) => row == null ? Future.value(null) : _rowToTxViewWithDebt(row),
+      );
+
+  Future<TxView> _rowToTxViewWithDebt(QueryRow row) async {
+    final tx = db.transactions.map(row.data);
+    if (tx.deletedAt != null ||
+        tx.debtDelta == 0 ||
+        tx.settlesTxId != null ||
+        tx.personId == null) {
+      return _rowToTxView(row);
+    }
+    final remaining = await _allocateDebtsForPerson(tx.personId!);
+    return _rowToTxView(row, debtRemaining: remaining[tx.id]);
+  }
 
   Selectable<QueryRow> _txByIdQuery(int id) => db.customSelect(
     '${Repository._txViewSelect} WHERE t.id = ?',
@@ -99,6 +149,7 @@ extension TransactionQueries on Repository {
     String? groupId,
     int? recurringId,
     bool isWriteoff = false,
+    int? settlesTxId,
     List<BillLine> bill = const [],
     int? autoEventId,
     bool needsReview = false,
@@ -115,6 +166,30 @@ extension TransactionQueries on Repository {
       intoFund: intoFund,
     );
     return db.transaction(() async {
+      if (settlesTxId != null) {
+        final target = await (db.select(
+          db.transactions,
+        )..where((t) => t.id.equals(settlesTxId))).getSingleOrNull();
+        if (target == null || target.deletedAt != null) {
+          throw ArgumentError(
+            'Khoản nợ cần tất toán không tồn tại hoặc đã bị xoá',
+          );
+        }
+        if (target.debtDelta == 0 || target.settlesTxId != null) {
+          throw ArgumentError(
+            'Giao dịch này không phải khoản nợ có thể tất toán',
+          );
+        }
+        final remaining = target.personId == null
+            ? 0
+            : (await _allocateDebtsForPerson(target.personId!))[settlesTxId] ??
+                  0;
+        if (amount > remaining) {
+          throw ArgumentError(
+            'Số tiền tất toán ($amount) vượt quá phần còn lại ($remaining)',
+          );
+        }
+      }
       final id = await db
           .into(db.transactions)
           .insert(
@@ -137,6 +212,7 @@ extension TransactionQueries on Repository {
               groupId: Value(groupId),
               recurringId: Value(recurringId),
               isWriteoff: Value(isWriteoff),
+              settlesTxId: Value(settlesTxId),
               autoEventId: Value(autoEventId),
               needsReview: Value(needsReview),
               createdAt: now,

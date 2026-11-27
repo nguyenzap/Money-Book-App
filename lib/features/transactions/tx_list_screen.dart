@@ -14,6 +14,7 @@ class TxListScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final txs = ref.watch(allTransactionsProvider);
+    final balances = ref.watch(runningBalancesProvider).valueOrNull;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Giao dịch')),
@@ -33,7 +34,7 @@ class TxListScreen extends ConsumerWidget {
               ),
             );
           }
-          return GroupedTxList(views: list);
+          return GroupedTxList(views: list, runningBalances: balances);
         },
       ),
     );
@@ -47,12 +48,14 @@ class GroupedTxList extends StatelessWidget {
   const GroupedTxList({
     super.key,
     required this.views,
+    this.runningBalances,
     this.padding,
     this.shrinkWrap = false,
     this.physics,
   });
 
   final List<TxView> views;
+  final Map<int, Map<int, int>>? runningBalances;
   final EdgeInsets? padding;
   final bool shrinkWrap;
   final ScrollPhysics? physics;
@@ -94,6 +97,7 @@ class GroupedTxList extends StatelessWidget {
         final view = (item as _TxItem).view;
         return TxTile(
           view: view,
+          walletBalances: runningBalances?[view.tx.id],
           onTap: () => openTxEditor(context, editing: view),
         );
       },

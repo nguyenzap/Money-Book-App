@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/db/database.dart';
 import '../../core/db/repository.dart';
 import '../../core/domain/tx_kind.dart';
 import '../../core/format/dates.dart';
@@ -82,7 +83,7 @@ class DebtPersonScreen extends ConsumerWidget {
                     message: 'Ghi lại khi cho mượn, trả dùm hoặc vay tiền.',
                   );
                 }
-                return _DebtTimeline(views: list);
+                return _DebtTimeline(views: list, person: person);
               },
             ),
           ),
@@ -155,9 +156,45 @@ class _NetHeader extends StatelessWidget {
 
 /// Dòng thời gian các giao dịch nợ, kèm số dư nợ sau mỗi lần.
 class _DebtTimeline extends StatelessWidget {
-  const _DebtTimeline({required this.views});
+  const _DebtTimeline({required this.views, required this.person});
 
   final List<TxView> views;
+  final Person? person;
+
+  void _showEntryActions(BuildContext context, TxView view) {
+    final canSettle = view.canSettleEntry && person != null;
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (canSettle)
+              ListTile(
+                leading: const Icon(Icons.done_all),
+                title: const Text('Tất toán khoản này'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  showSettleDebtSheet(
+                    context,
+                    person: person!,
+                    entry: view,
+                  );
+                },
+              ),
+            ListTile(
+              leading: const Icon(Icons.edit_outlined),
+              title: const Text('Sửa'),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                openTxEditor(context, editing: view);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -169,6 +206,7 @@ class _DebtTimeline extends StatelessWidget {
       acc += views[i].tx.debtDelta;
       running[i] = acc;
     }
+    final byId = <int, TxView>{for (final v in views) v.tx.id: v};
 
     return ListView.separated(
       padding: const EdgeInsets.only(bottom: 96),
@@ -179,23 +217,58 @@ class _DebtTimeline extends StatelessWidget {
         final scheme = Theme.of(context).colorScheme;
         final delta = view.tx.debtDelta;
         final balance = running[index];
+        final muted = view.isDebtSettled;
+        final target =
+            view.tx.settlesTxId == null ? null : byId[view.tx.settlesTxId!];
 
         return ListTile(
           leading: IconAvatar(
             icon: view.kind.icon,
-            color: delta > 0 ? incomeColor(context) : expenseColor(context),
+            color: muted
+                ? scheme.outline
+                : delta > 0
+                    ? incomeColor(context)
+                    : expenseColor(context),
           ),
           title: Text(
             view.tx.note?.trim().isNotEmpty == true
                 ? view.tx.note!.trim()
-                : view.kind.label,
+                : (view.category?.name ?? view.kind.label),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
+            style: muted ? TextStyle(color: scheme.outline) : null,
           ),
-          subtitle: Text(
-            '${view.kind.label} · '
-            '${formatDate(DateTime.fromMillisecondsSinceEpoch(view.tx.occurredAt))}',
-            style: TextStyle(color: scheme.outline, fontSize: 12.5),
+          subtitle: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                '${view.kind.label} · '
+                '${formatDate(DateTime.fromMillisecondsSinceEpoch(view.tx.occurredAt))}',
+                style: TextStyle(color: scheme.outline, fontSize: 12.5),
+              ),
+              if (view.isSettlement)
+                Text(
+                  target != null
+                      ? 'Trả cho khoản ${formatDate(DateTime.fromMillisecondsSinceEpoch(target.tx.occurredAt))}'
+                      : 'Tất toán khoản nợ',
+                  style: TextStyle(color: scheme.outline, fontSize: 12),
+                )
+              else if (view.isDebtSettled)
+                Text(
+                  'Đã xong',
+                  style: TextStyle(color: scheme.outline, fontSize: 12),
+                )
+              else if (view.isDebtPartlySettled)
+                Text(
+                  'Còn ${formatVnd(view.debtRemaining!)}',
+                  style: TextStyle(
+                    color: scheme.primary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+            ],
           ),
           trailing: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -205,7 +278,7 @@ class _DebtTimeline extends StatelessWidget {
                 formatVndSigned(delta),
                 style: TextStyle(
                   fontWeight: FontWeight.w600,
-                  color: amountColor(context, delta),
+                  color: muted ? scheme.outline : amountColor(context, delta),
                   fontFeatures: const [FontFeature.tabularFigures()],
                 ),
               ),
@@ -219,7 +292,7 @@ class _DebtTimeline extends StatelessWidget {
               ),
             ],
           ),
-          onTap: () => openTxEditor(context, editing: view),
+          onTap: () => _showEntryActions(context, view),
         );
       },
     );

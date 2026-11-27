@@ -151,6 +151,7 @@ extension BackupExport on BackupService {
     'note': t.note,
     'groupId': t.groupId,
     'isWriteoff': t.isWriteoff,
+    'settlesTxId': t.settlesTxId,
     'createdAt': t.createdAt,
     'updatedAt': t.updatedAt,
     'deletedAt': t.deletedAt,

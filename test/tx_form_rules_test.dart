@@ -59,6 +59,20 @@ void main() {
       expect(expense.copyWithFlags(paidByOther: true).showsFundPicker, isFalse);
       expect(const TxForm(kind: TxKind.transfer).showsFundPicker, isFalse);
     });
+
+    test('chế độ Ghi nợ: ẩn chọn loại, hiện chọn người, tiêu đề Ghi nợ', () {
+      final paid = expense.copyWithFlags(paidByOther: true);
+      expect(paid.showsKindSelector, isFalse);
+      expect(paid.showsPersonPicker, isTrue);
+      expect(paid.title, 'Ghi nợ');
+      expect(paid.copyWithFlags(isEditing: true).title, 'Ghi nợ');
+
+      expect(expense.showsKindSelector, isTrue);
+      expect(expense.showsPersonPicker, isFalse);
+      expect(expense.title, 'Ghi giao dịch');
+      expect(expense.copyWithFlags(isEditing: true).title, 'Sửa giao dịch');
+      expect(const TxForm(kind: TxKind.lend).showsPersonPicker, isTrue);
+    });
   });
 
   group('đổi loại', () {

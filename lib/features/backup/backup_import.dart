@@ -153,6 +153,9 @@ extension BackupImport on BackupService {
       }
 
       final txIds = <int, int>{};
+      // Giao dịch tất toán có thể đứng trước hoặc sau khoản nợ gốc trong file,
+      // nên chèn hết giao dịch trước rồi mới nối lại settles_tx_id theo id mới.
+      final pendingSettles = <(int newTxId, int oldTargetId)>[];
       // Nhóm cũng ánh xạ sang mã mới như id: gộp cùng một file hai lần thì
       // hai cặp trả dùm không được dính vào nhau, xoá một cặp là mất cả hai.
       final groupIds = <String, String>{};
@@ -186,7 +189,7 @@ extension BackupImport on BackupService {
                 intoFund: fileDelta == 0 ? null : fileDelta > 0,
               );
 
-        txIds[row['id'] as int] = await db
+        final newTxId = txIds[row['id'] as int] = await db
             .into(db.transactions)
             .insert(
               TransactionsCompanion.insert(
@@ -225,6 +228,17 @@ extension BackupImport on BackupService {
                 needsReview: Value(row['needsReview'] as bool? ?? false),
               ),
             );
+        final oldSettlesId = row['settlesTxId'];
+        if (oldSettlesId is int) {
+          pendingSettles.add((newTxId, oldSettlesId));
+        }
+      }
+
+      for (final (newTxId, oldTargetId) in pendingSettles) {
+        final newTargetId = txIds[oldTargetId];
+        if (newTargetId == null) continue;
+        await (db.update(db.transactions)..where((t) => t.id.equals(newTxId)))
+            .write(TransactionsCompanion(settlesTxId: Value(newTargetId)));
       }
 
       for (final row in billRows) {

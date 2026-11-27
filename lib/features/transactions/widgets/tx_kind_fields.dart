@@ -60,22 +60,21 @@ List<Widget> txKindFields({
   }
 
   if (kind.needsCategory) {
-    widgets
-      ..add(const SizedBox(height: 12))
-      ..add(CategoryPicker(
-        flow: kind.categoryFlow,
-        value: form.categoryId,
-        onChanged: onCategory,
-      ));
+    if (widgets.isNotEmpty) widgets.add(const SizedBox(height: 12));
+    widgets.add(CategoryPicker(
+      flow: kind.categoryFlow,
+      value: form.categoryId,
+      onChanged: onCategory,
+    ));
   }
 
-  if (kind.needsPerson) {
-    widgets
-      ..add(const SizedBox(height: 12))
-      ..add(PersonPicker(
-        value: form.personId,
-        onChanged: onPerson,
-      ));
+  if (form.showsPersonPicker) {
+    if (widgets.isNotEmpty) widgets.add(const SizedBox(height: 12));
+    widgets.add(PersonPicker(
+      label: form.isPaidByOther ? 'Ai trả dùm' : 'Với ai',
+      value: form.personId,
+      onChanged: onPerson,
+    ));
   }
 
   return widgets;

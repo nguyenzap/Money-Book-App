@@ -54,4 +54,55 @@ extension DebtQueries on Repository {
       ..where(t.deletedAt.isNull() & t.personId.equals(personId));
     return (await q.getSingle()).read(sumExp) ?? 0;
   }
+
+  /// Phần nợ còn lại theo từng khoản của một người, phân bổ theo thứ tự thời
+  /// gian (FIFO) — xem [allocateDebts].
+  Future<Map<int, int>> _allocateDebtsForPerson(int personId) async {
+    final t = db.transactions;
+    final rows = await (db.select(t)
+          ..where(
+            (r) =>
+                r.personId.equals(personId) &
+                r.deletedAt.isNull() &
+                r.debtDelta.isNotValue(0),
+          ))
+        .get();
+    return allocateDebts(rows.map(_debtRowOf));
+  }
+
+  Future<Map<int, int>> _allocateDebtsForPeople(Set<int> personIds) async {
+    if (personIds.isEmpty) return const {};
+    final t = db.transactions;
+    final rows = await (db.select(t)
+          ..where(
+            (r) =>
+                r.personId.isIn(personIds) &
+                r.deletedAt.isNull() &
+                r.debtDelta.isNotValue(0),
+          ))
+        .get();
+    return _allocateGroupedByPerson(rows);
+  }
+
+  Map<int, int> _allocateGroupedByPerson(Iterable<Transaction> txs) {
+    final byPerson = <int, List<DebtRow>>{};
+    for (final tx in txs) {
+      final pid = tx.personId;
+      if (pid == null || tx.deletedAt != null || tx.debtDelta == 0) continue;
+      (byPerson[pid] ??= <DebtRow>[]).add(_debtRowOf(tx));
+    }
+    final result = <int, int>{};
+    for (final rows in byPerson.values) {
+      result.addAll(allocateDebts(rows));
+    }
+    return result;
+  }
+
+  DebtRow _debtRowOf(Transaction tx) => DebtRow(
+        id: tx.id,
+        occurredAt: tx.occurredAt,
+        debtDelta: tx.debtDelta,
+        settlesTxId: tx.settlesTxId,
+        deletedAt: tx.deletedAt,
+      );
 }

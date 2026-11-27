@@ -181,6 +181,15 @@ class Transactions extends Table {
   /// đụng tới, nhưng công nợ vẫn về 0.
   BoolColumn get isWriteoff => boolean().withDefault(const Constant(false))();
 
+  /// Giao dịch nợ mà dòng này tất toán (một phần hoặc toàn bộ). Null với
+  /// giao dịch thường hoặc tất toán gộp cả người.
+  @ReferenceName('settlementTransactions')
+  IntColumn get settlesTxId => integer().nullable().references(
+    Transactions,
+    #id,
+    onDelete: KeyAction.setNull,
+  )();
+
   /// Thông báo ngân hàng đã sinh ra giao dịch này. Null = nhập tay.
   IntColumn get autoEventId => integer().nullable().references(
     NotificationEvents,

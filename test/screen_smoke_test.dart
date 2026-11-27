@@ -11,6 +11,7 @@ import 'package:moneybook/core/providers.dart';
 import 'package:moneybook/features/budgets/budget_screen.dart';
 import 'package:moneybook/features/funds/fund_screen.dart';
 import 'package:moneybook/features/home/dashboard_screen.dart';
+import 'package:moneybook/features/home/quick_action_sheet.dart';
 import 'package:moneybook/features/stats/category_detail_screen.dart';
 import 'package:moneybook/features/stats/stats_screen.dart';
 import 'package:moneybook/features/templates/template_screen.dart';
@@ -232,6 +233,24 @@ void main() {
     await tapOpen(tester);
     expect(tester.takeException(), isNull);
     expect(find.text('Cà phê'), findsWidgets);
+    await close(tester);
+  });
+
+  testWidgets('Bảng ghi nhanh có mục Ghi nợ', (tester) async {
+    await pumpScreen(
+      tester,
+      launcher(
+        (context, _) => showModalBottomSheet<void>(
+          context: context,
+          builder: (_) => const QuickActionSheet(),
+        ),
+      ),
+    );
+    await tapOpen(tester);
+    expect(tester.takeException(), isNull);
+    expect(find.text('Vay mượn'), findsOneWidget);
+    expect(find.text('Ghi nợ'), findsOneWidget);
+    expect(find.text('Người khác trả dùm, mình nợ lại'), findsOneWidget);
     await close(tester);
   });
 }

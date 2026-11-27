@@ -3,6 +3,7 @@ import 'package:uuid/uuid.dart';
 
 import '../domain/bill.dart';
 import '../domain/budget_progress.dart';
+import '../domain/debt_allocation.dart';
 import '../domain/fund_delta.dart';
 import '../domain/tx_kind.dart';
 import '../domain/tx_rules.dart';
@@ -123,7 +124,7 @@ class Repository {
 
   // ----- Giao dịch ------------------------------------------------------
 
-  TxView _rowToTxView(QueryRow row) {
+  TxView _rowToTxView(QueryRow row, {int? debtRemaining}) {
     final tx = db.transactions.map(row.data);
     return TxView(
       tx: tx,
@@ -164,6 +165,7 @@ class Repository {
               updatedAt: 0,
             ),
       billCount: row.read<int>('bill_count'),
+      debtRemaining: debtRemaining,
     );
   }
 

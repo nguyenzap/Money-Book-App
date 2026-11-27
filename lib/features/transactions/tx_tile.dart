@@ -10,16 +10,75 @@ import '../../core/widgets.dart';
 
 /// Một dòng giao dịch trong danh sách.
 class TxTile extends StatelessWidget {
-  const TxTile({super.key, required this.view, this.onTap});
+  const TxTile({
+    super.key,
+    required this.view,
+    this.onTap,
+    this.walletBalances,
+  });
 
   final TxView view;
   final VoidCallback? onTap;
+
+  /// Số dư ví ngay sau giao dịch này (`walletId -> balance`), nếu cần hiển thị.
+  final Map<int, int>? walletBalances;
+
+  String? _balanceLine() {
+    final balances = walletBalances;
+    if (balances == null || balances.isEmpty) return null;
+    final fromId = view.tx.walletFromId;
+    final toId = view.tx.walletToId;
+    final amounts = <int>[
+      if (fromId != null && balances.containsKey(fromId)) balances[fromId]!,
+      if (toId != null && toId != fromId && balances.containsKey(toId))
+        balances[toId]!,
+    ];
+    if (amounts.isEmpty) return null;
+    return 'Số dư ${amounts.map(formatVnd).join(' → ')}';
+  }
 
   @override
   Widget build(BuildContext context) {
     final signed = view.signedAmount;
     final isTransfer = view.kind == TxKind.transfer;
     final scheme = Theme.of(context).colorScheme;
+    final balanceLine = _balanceLine();
+
+    final metaLine = Text.rich(
+      TextSpan(
+        children: [
+          // Tự ghi từ thông báo ngân hàng.
+          if (view.tx.autoEventId != null)
+            WidgetSpan(
+              alignment: PlaceholderAlignment.middle,
+              child: Padding(
+                padding: const EdgeInsets.only(right: 4),
+                child: Icon(
+                  view.tx.needsReview
+                      ? Icons.bolt
+                      : Icons.bolt_outlined,
+                  size: 14,
+                  color: view.tx.needsReview
+                      ? scheme.tertiary
+                      : scheme.outline,
+                ),
+              ),
+            ),
+          TextSpan(
+            text: [
+              if (view.subtitle.isNotEmpty) view.subtitle,
+              if (view.hasBill) '${view.billCount} món',
+              formatTime(
+                DateTime.fromMillisecondsSinceEpoch(view.tx.occurredAt),
+              ),
+            ].join(' · '),
+          ),
+        ],
+      ),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: TextStyle(color: scheme.outline, fontSize: 12.5),
+    );
 
     return ListTile(
       onTap: onTap,
@@ -30,42 +89,9 @@ class TxTile extends StatelessWidget {
         overflow: TextOverflow.ellipsis,
         style: const TextStyle(fontWeight: FontWeight.w500),
       ),
-      subtitle: Text.rich(
-        TextSpan(
-          children: [
-            // Tự ghi từ thông báo ngân hàng.
-            if (view.tx.autoEventId != null)
-              WidgetSpan(
-                alignment: PlaceholderAlignment.middle,
-                child: Padding(
-                  padding: const EdgeInsets.only(right: 4),
-                  child: Icon(
-                    view.tx.needsReview
-                        ? Icons.bolt
-                        : Icons.bolt_outlined,
-                    size: 14,
-                    color: view.tx.needsReview
-                        ? scheme.tertiary
-                        : scheme.outline,
-                  ),
-                ),
-              ),
-            TextSpan(
-              text: [
-                if (view.subtitle.isNotEmpty) view.subtitle,
-                if (view.hasBill) '${view.billCount} món',
-                formatTime(
-                  DateTime.fromMillisecondsSinceEpoch(view.tx.occurredAt),
-                ),
-              ].join(' · '),
-            ),
-          ],
-        ),
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(color: scheme.outline, fontSize: 12.5),
-      ),
+      subtitle: metaLine,
       trailing: Column(
+        mainAxisSize: MainAxisSize.min,
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
@@ -83,6 +109,17 @@ class TxTile extends StatelessWidget {
             Text(
               view.kind.label,
               style: TextStyle(fontSize: 11, color: scheme.outline),
+            ),
+          if (balanceLine != null)
+            Text(
+              balanceLine,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 11,
+                color: scheme.outline,
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
             ),
         ],
       ),

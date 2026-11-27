@@ -6,6 +6,7 @@ import 'db/database.dart';
 import 'db/repository.dart';
 import 'domain/category_flow.dart';
 import 'domain/free_money.dart';
+import 'domain/running_balance.dart';
 import 'format/dates.dart';
 
 /// Database dùng chung cho cả app. Được ghi đè ở main() bằng một thể hiện đã
@@ -84,6 +85,32 @@ final recentTransactionsProvider = StreamProvider<List<TxView>>((ref) {
 /// Toàn bộ giao dịch, cho màn danh sách.
 final allTransactionsProvider = StreamProvider<List<TxView>>((ref) {
   return ref.watch(repositoryProvider).watchTransactions();
+});
+
+/// Số dư của các ví liên quan ngay sau mỗi giao dịch, dùng ở màn danh sách.
+///
+/// Lấy cả ví đã lưu trữ vì giao dịch cũ của chúng vẫn nằm trong lịch sử.
+final runningBalancesProvider =
+    Provider<AsyncValue<Map<int, Map<int, int>>>>((ref) {
+  final txs = ref.watch(allTransactionsProvider);
+  final wallets = ref.watch(allWalletsProvider);
+
+  if (txs.hasError) {
+    return AsyncError(txs.error!, txs.stackTrace!);
+  }
+  if (wallets.hasError) {
+    return AsyncError(wallets.error!, wallets.stackTrace!);
+  }
+  if (!txs.hasValue || !wallets.hasValue) {
+    return const AsyncLoading();
+  }
+
+  final initial = {
+    for (final w in wallets.value!) w.id: w.wallet.initialBalance,
+  };
+  return AsyncData(
+    runningBalances(txs.value!.map((v) => v.tx), initial),
+  );
 });
 
 /// Tháng đang xem ở màn Thống kê, dạng yyyymm.
