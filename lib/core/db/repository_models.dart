@@ -33,6 +33,7 @@ class TxView {
     this.category,
     this.person,
     this.billCount = 0,
+    this.debtRemaining,
   });
 
   final Transaction tx;
@@ -44,7 +45,31 @@ class TxView {
   /// Số dòng trong hoá đơn chi tiết, 0 nếu không có hoá đơn.
   final int billCount;
 
+  /// Phần nợ còn lại của khoản nợ này (>= 0). Null nếu không phải khoản nợ
+  /// (debt_delta == 0 hoặc chính nó là dòng tất toán của khoản khác).
+  final int? debtRemaining;
+
   bool get hasBill => billCount > 0;
+
+  /// Dòng này là một giao dịch tất toán cho một khoản nợ cụ thể.
+  bool get isSettlement => tx.settlesTxId != null;
+
+  /// Là một khoản nợ có thể theo dõi phần còn lại (debt_delta != 0 và không
+  /// phải dòng tất toán).
+  bool get isDebtEntry => tx.debtDelta != 0 && tx.settlesTxId == null;
+
+  /// Khoản nợ đã tất toán xong (phần còn lại = 0).
+  bool get isDebtSettled => isDebtEntry && debtRemaining == 0;
+
+  /// Khoản nợ đã trả một phần (0 < còn lại < |debt_delta|).
+  bool get isDebtPartlySettled =>
+      isDebtEntry &&
+      debtRemaining != null &&
+      debtRemaining! > 0 &&
+      debtRemaining! < tx.debtDelta.abs();
+
+  /// Còn có thể bấm "Tất toán khoản này".
+  bool get canSettleEntry => isDebtEntry && (debtRemaining ?? 0) > 0;
 
   TxKind get kind => tx.kind;
 

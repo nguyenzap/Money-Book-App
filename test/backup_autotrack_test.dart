@@ -77,7 +77,7 @@ void main() {
   test('file không chứa thông báo thô', () async {
     final json = await BackupService(source).buildJson();
     final data = jsonDecode(json) as Map<String, dynamic>;
-    expect(data['formatVersion'], 6);
+    expect(data['formatVersion'], kBackupFormatVersion);
     expect(data.containsKey('notificationEvents'), isFalse);
     expect(json, isNot(contains('1234567890')), reason: 'số tài khoản');
     expect(json, isNot(contains('1,000,000')), reason: 'số dư trong tin');

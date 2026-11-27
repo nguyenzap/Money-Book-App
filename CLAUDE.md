@@ -18,6 +18,11 @@ Toolchain đã cấu hình sẵn: Flutter 3.41.2, JDK 17 tại `C:\Users\Admin\.
 (trỏ bằng `flutter config --jdk-dir`, vì JDK 23 mặc định của máy quá mới cho Gradle),
 Android SDK 36 + cmdline-tools.
 
+Máy Linux (Ubuntu) cũng có toolchain từ 2026-11-27: Flutter 3.41.2 ở
+`~/development/flutter`, JDK 17 (`/usr/lib/jvm/java-17-openjdk-amd64`, Java
+mặc định của máy là 25, quá mới cho Gradle), Android SDK ở `~/Android/Sdk`.
+Chỉ build được bản `--debug`: khoá ký release chỉ nằm trên máy Windows.
+
 ## Quy tắc bất di bất dịch
 
 **Số tiền là `int` = số đồng VND.** Không bao giờ dùng `double`.
@@ -66,6 +71,7 @@ lib/core/
   domain/tx_rules.dart     kiểm tra chung cho mọi đường ghi giao dịch (kể cả
                            nhập sao lưu): trả dùm không kèm ví, hoá đơn khớp tổng
   domain/budget_progress.dart  nhịp độ ngân sách, capBudgetsByCash (thuần Dart)
+  domain/debt_allocation.dart  phân bổ phần nợ còn lại theo FIFO (thuần Dart)
   db/tables.dart           định nghĩa bảng (sửa xong PHẢI chạy build_runner)
   db/database.dart         migration, PRAGMA, dữ liệu gieo sẵn
   db/repository.dart       class Repository + biểu thức SQL dùng chung
@@ -136,21 +142,47 @@ giờ làm vượt hạn mức oan. Chia lẻ thì phần dư dồn vào mình �
 
 ## Người khác trả dùm
 
-Chiều ngược của trả dùm: bạn trả thay mình, mình chỉ ghi phần của mình. Công
-tắc "Người khác trả dùm" trong màn ghi Chi tiêu (cạnh công tắc chia tiền, hai
-cái loại trừ nhau). Ghi **đúng một** `expense` **không có chân ví nào**, có
-`person_id` — không tách thành "vay rồi chi" vì mình chưa hề cầm số tiền đó.
+Chiều ngược của trả dùm: bạn trả thay mình, mình chỉ ghi phần của mình. Mở qua
+mục "Ghi nợ" trong bảng ghi nhanh (`QuickActionSheet`, không phải công tắc trong
+màn ghi Chi tiêu; màn ghi mở với `initialPaidByOther: true`, ẩn thanh chọn loại
+và ví). Ghi **đúng một** `expense` **không có chân ví nào**, có `person_id` —
+không tách thành "vay rồi chi" vì mình chưa hề cầm số tiền đó.
 
 - Số dư ví đúng sẵn nhờ công thức chung: không chân ví thì không đụng ví nào.
 - Thống kê, ngân sách đếm nó như mọi khoản chi.
 - Nợ: `TxKind.debtDelta(amount, hasPerson: true)` cho `expense` ra `-amount`.
   Mọi chỗ ghi `debt_delta` (add, update, nhập sao lưu) truyền
   `hasPerson: personId != null`. Khoản chi thường vì thế KHÔNG được mang
-  `person_id` — màn ghi chỉ gửi người khi công tắc bật.
+  `person_id` — màn ghi chỉ gửi người khi đang ở chế độ Ghi nợ
+  (`TxForm.isPaidByOther`).
 - Tiền tiêu được giảm ngay qua `watchTotalOwed`, dù ví không đổi.
 - `addTransaction` / `updateTransaction` ném `ArgumentError` nếu khoản chi có
   người mà lại có ví hoặc quỹ (đếm hai lần). Trả lại thì ghi `repay` thường.
 - `TxView.isPaidByOther`; `signedAmount` vẫn âm dù không có ví.
+
+## Tất toán từng khoản
+
+Cột `transactions.settles_tx_id` (`Transactions.settlesTxId`, nullable, tham chiếu
+`transactions.id`, `ON DELETE SET NULL`, từ schema v7) nối một giao dịch tất toán
+(`collect` / `repay`, có ví hoặc xoá nợ `is_writeoff`) với đúng một khoản nợ gốc.
+
+- Một khoản nợ là giao dịch có `debt_delta != 0` và `settles_tx_id IS NULL`.
+- Phần còn lại (`TxView.debtRemaining`, tính ở tầng `Repository` qua hàm thuần
+  `allocateDebts` trong `lib/core/domain/debt_allocation.dart`) được phân bổ
+  theo từng người, theo thứ tự thời gian `(occurred_at, id)` (FIFO), không rẽ
+  nhánh theo `kind`:
+  - Dòng có `settles_tx_id` trừ vào khoản đích trước (tối đa phần còn mở của
+    đích); nếu dư thì phần dư xử lý như dòng không gắn đích.
+  - Dòng không gắn đích (tất toán cả sổ, xoá nợ, cho mượn, vay, trả dùm…) trừ
+    lần lượt vào các khoản đang mở **ngược dấu**, cũ nhất trước; phần còn lại
+    mở một khoản mới theo chiều của chính dòng đó.
+  - Tổng các phần còn mở có dấu luôn bằng dư nợ ròng của người đó (`netDebtOf`).
+  - Dòng có `settles_tx_id != null` luôn có `debtRemaining == null`.
+- `Repository.addTransaction(settlesTxId: ...)` kiểm tra khoản đích tồn tại, chưa
+  xoá, là khoản nợ, và `amount <= remaining` (theo đúng phân bổ FIFO); sai thì
+  ném `ArgumentError`.
+- Sao lưu JSON v7 xuất `settlesTxId` và ánh xạ lại theo bảng đổi id giao dịch
+  sau khi chèn xong toàn bộ giao dịch (không phụ thuộc thứ tự trong file).
 
 ## Ngân sách và tiền thật
 

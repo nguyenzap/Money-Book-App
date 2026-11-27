@@ -38,7 +38,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.e);
 
   @override
-  int get schemaVersion => 6;
+  int get schemaVersion => 7;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -106,6 +106,14 @@ class AppDatabase extends _$AppDatabase {
               await customStatement(sql);
             }
           }
+          // v7: tất toán từng khoản nợ riêng lẻ.
+          if (from < 7) {
+            await m.addColumn(transactions, transactions.settlesTxId);
+            await customStatement(
+              'CREATE INDEX IF NOT EXISTS ix_tx_settles ON transactions(settles_tx_id) '
+              'WHERE settles_tx_id IS NOT NULL AND deleted_at IS NULL',
+            );
+          }
         },
         beforeOpen: (details) async {
           // SQLite mặc định TẮT ràng buộc khoá ngoại. Không bật thì mọi
@@ -135,6 +143,8 @@ class AppDatabase extends _$AppDatabase {
       'CREATE INDEX IF NOT EXISTS ix_tx_group ON transactions(group_id)',
       'CREATE INDEX IF NOT EXISTS ix_tx_fund ON transactions(fund_id) '
           'WHERE deleted_at IS NULL',
+      'CREATE INDEX IF NOT EXISTS ix_tx_settles ON transactions(settles_tx_id) '
+          'WHERE settles_tx_id IS NOT NULL AND deleted_at IS NULL',
       'CREATE INDEX IF NOT EXISTS ix_funds_wallet ON funds(wallet_id)',
       'CREATE INDEX IF NOT EXISTS ix_bill_tx ON bill_items(transaction_id)',
       'CREATE INDEX IF NOT EXISTS ix_recurring_due ON recurring_templates(is_active, next_due_at)',

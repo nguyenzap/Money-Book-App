@@ -4543,6 +4543,20 @@ class $TransactionsTable extends Transactions
     ),
     defaultValue: const Constant(false),
   );
+  static const VerificationMeta _settlesTxIdMeta = const VerificationMeta(
+    'settlesTxId',
+  );
+  @override
+  late final GeneratedColumn<int> settlesTxId = GeneratedColumn<int>(
+    'settles_tx_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES transactions (id) ON DELETE SET NULL',
+    ),
+  );
   static const VerificationMeta _autoEventIdMeta = const VerificationMeta(
     'autoEventId',
   );
@@ -4624,6 +4638,7 @@ class $TransactionsTable extends Transactions
     fundId,
     fundDelta,
     isWriteoff,
+    settlesTxId,
     autoEventId,
     needsReview,
     createdAt,
@@ -4752,6 +4767,15 @@ class $TransactionsTable extends Transactions
         isWriteoff.isAcceptableOrUnknown(data['is_writeoff']!, _isWriteoffMeta),
       );
     }
+    if (data.containsKey('settles_tx_id')) {
+      context.handle(
+        _settlesTxIdMeta,
+        settlesTxId.isAcceptableOrUnknown(
+          data['settles_tx_id']!,
+          _settlesTxIdMeta,
+        ),
+      );
+    }
     if (data.containsKey('auto_event_id')) {
       context.handle(
         _autoEventIdMeta,
@@ -4871,6 +4895,10 @@ class $TransactionsTable extends Transactions
         DriftSqlType.bool,
         data['${effectivePrefix}is_writeoff'],
       )!,
+      settlesTxId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}settles_tx_id'],
+      ),
       autoEventId: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}auto_event_id'],
@@ -4955,6 +4983,10 @@ class Transaction extends DataClass implements Insertable<Transaction> {
   /// đụng tới, nhưng công nợ vẫn về 0.
   final bool isWriteoff;
 
+  /// Giao dịch nợ mà dòng này tất toán (một phần hoặc toàn bộ). Null với
+  /// giao dịch thường hoặc tất toán gộp cả người.
+  final int? settlesTxId;
+
   /// Thông báo ngân hàng đã sinh ra giao dịch này. Null = nhập tay.
   final int? autoEventId;
 
@@ -4985,6 +5017,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     this.fundId,
     required this.fundDelta,
     required this.isWriteoff,
+    this.settlesTxId,
     this.autoEventId,
     required this.needsReview,
     required this.createdAt,
@@ -5031,6 +5064,9 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     }
     map['fund_delta'] = Variable<int>(fundDelta);
     map['is_writeoff'] = Variable<bool>(isWriteoff);
+    if (!nullToAbsent || settlesTxId != null) {
+      map['settles_tx_id'] = Variable<int>(settlesTxId);
+    }
     if (!nullToAbsent || autoEventId != null) {
       map['auto_event_id'] = Variable<int>(autoEventId);
     }
@@ -5076,6 +5112,9 @@ class Transaction extends DataClass implements Insertable<Transaction> {
           : Value(fundId),
       fundDelta: Value(fundDelta),
       isWriteoff: Value(isWriteoff),
+      settlesTxId: settlesTxId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(settlesTxId),
       autoEventId: autoEventId == null && nullToAbsent
           ? const Value.absent()
           : Value(autoEventId),
@@ -5113,6 +5152,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       fundId: serializer.fromJson<int?>(json['fundId']),
       fundDelta: serializer.fromJson<int>(json['fundDelta']),
       isWriteoff: serializer.fromJson<bool>(json['isWriteoff']),
+      settlesTxId: serializer.fromJson<int?>(json['settlesTxId']),
       autoEventId: serializer.fromJson<int?>(json['autoEventId']),
       needsReview: serializer.fromJson<bool>(json['needsReview']),
       createdAt: serializer.fromJson<int>(json['createdAt']),
@@ -5143,6 +5183,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       'fundId': serializer.toJson<int?>(fundId),
       'fundDelta': serializer.toJson<int>(fundDelta),
       'isWriteoff': serializer.toJson<bool>(isWriteoff),
+      'settlesTxId': serializer.toJson<int?>(settlesTxId),
       'autoEventId': serializer.toJson<int?>(autoEventId),
       'needsReview': serializer.toJson<bool>(needsReview),
       'createdAt': serializer.toJson<int>(createdAt),
@@ -5169,6 +5210,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     Value<int?> fundId = const Value.absent(),
     int? fundDelta,
     bool? isWriteoff,
+    Value<int?> settlesTxId = const Value.absent(),
     Value<int?> autoEventId = const Value.absent(),
     bool? needsReview,
     int? createdAt,
@@ -5192,6 +5234,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     fundId: fundId.present ? fundId.value : this.fundId,
     fundDelta: fundDelta ?? this.fundDelta,
     isWriteoff: isWriteoff ?? this.isWriteoff,
+    settlesTxId: settlesTxId.present ? settlesTxId.value : this.settlesTxId,
     autoEventId: autoEventId.present ? autoEventId.value : this.autoEventId,
     needsReview: needsReview ?? this.needsReview,
     createdAt: createdAt ?? this.createdAt,
@@ -5229,6 +5272,9 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       isWriteoff: data.isWriteoff.present
           ? data.isWriteoff.value
           : this.isWriteoff,
+      settlesTxId: data.settlesTxId.present
+          ? data.settlesTxId.value
+          : this.settlesTxId,
       autoEventId: data.autoEventId.present
           ? data.autoEventId.value
           : this.autoEventId,
@@ -5261,6 +5307,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
           ..write('fundId: $fundId, ')
           ..write('fundDelta: $fundDelta, ')
           ..write('isWriteoff: $isWriteoff, ')
+          ..write('settlesTxId: $settlesTxId, ')
           ..write('autoEventId: $autoEventId, ')
           ..write('needsReview: $needsReview, ')
           ..write('createdAt: $createdAt, ')
@@ -5289,6 +5336,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     fundId,
     fundDelta,
     isWriteoff,
+    settlesTxId,
     autoEventId,
     needsReview,
     createdAt,
@@ -5316,6 +5364,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
           other.fundId == this.fundId &&
           other.fundDelta == this.fundDelta &&
           other.isWriteoff == this.isWriteoff &&
+          other.settlesTxId == this.settlesTxId &&
           other.autoEventId == this.autoEventId &&
           other.needsReview == this.needsReview &&
           other.createdAt == this.createdAt &&
@@ -5341,6 +5390,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
   final Value<int?> fundId;
   final Value<int> fundDelta;
   final Value<bool> isWriteoff;
+  final Value<int?> settlesTxId;
   final Value<int?> autoEventId;
   final Value<bool> needsReview;
   final Value<int> createdAt;
@@ -5364,6 +5414,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     this.fundId = const Value.absent(),
     this.fundDelta = const Value.absent(),
     this.isWriteoff = const Value.absent(),
+    this.settlesTxId = const Value.absent(),
     this.autoEventId = const Value.absent(),
     this.needsReview = const Value.absent(),
     this.createdAt = const Value.absent(),
@@ -5388,6 +5439,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     this.fundId = const Value.absent(),
     this.fundDelta = const Value.absent(),
     this.isWriteoff = const Value.absent(),
+    this.settlesTxId = const Value.absent(),
     this.autoEventId = const Value.absent(),
     this.needsReview = const Value.absent(),
     required int createdAt,
@@ -5418,6 +5470,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     Expression<int>? fundId,
     Expression<int>? fundDelta,
     Expression<bool>? isWriteoff,
+    Expression<int>? settlesTxId,
     Expression<int>? autoEventId,
     Expression<bool>? needsReview,
     Expression<int>? createdAt,
@@ -5442,6 +5495,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
       if (fundId != null) 'fund_id': fundId,
       if (fundDelta != null) 'fund_delta': fundDelta,
       if (isWriteoff != null) 'is_writeoff': isWriteoff,
+      if (settlesTxId != null) 'settles_tx_id': settlesTxId,
       if (autoEventId != null) 'auto_event_id': autoEventId,
       if (needsReview != null) 'needs_review': needsReview,
       if (createdAt != null) 'created_at': createdAt,
@@ -5468,6 +5522,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     Value<int?>? fundId,
     Value<int>? fundDelta,
     Value<bool>? isWriteoff,
+    Value<int?>? settlesTxId,
     Value<int?>? autoEventId,
     Value<bool>? needsReview,
     Value<int>? createdAt,
@@ -5492,6 +5547,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
       fundId: fundId ?? this.fundId,
       fundDelta: fundDelta ?? this.fundDelta,
       isWriteoff: isWriteoff ?? this.isWriteoff,
+      settlesTxId: settlesTxId ?? this.settlesTxId,
       autoEventId: autoEventId ?? this.autoEventId,
       needsReview: needsReview ?? this.needsReview,
       createdAt: createdAt ?? this.createdAt,
@@ -5556,6 +5612,9 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     if (isWriteoff.present) {
       map['is_writeoff'] = Variable<bool>(isWriteoff.value);
     }
+    if (settlesTxId.present) {
+      map['settles_tx_id'] = Variable<int>(settlesTxId.value);
+    }
     if (autoEventId.present) {
       map['auto_event_id'] = Variable<int>(autoEventId.value);
     }
@@ -5594,6 +5653,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
           ..write('fundId: $fundId, ')
           ..write('fundDelta: $fundDelta, ')
           ..write('isWriteoff: $isWriteoff, ')
+          ..write('settlesTxId: $settlesTxId, ')
           ..write('autoEventId: $autoEventId, ')
           ..write('needsReview: $needsReview, ')
           ..write('createdAt: $createdAt, ')
@@ -9154,6 +9214,13 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   ];
   @override
   StreamQueryUpdateRules get streamUpdateRules => const StreamQueryUpdateRules([
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'transactions',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('transactions', kind: UpdateKind.update)],
+    ),
     WritePropagation(
       on: TableUpdateQuery.onTableName(
         'notification_events',
@@ -12879,6 +12946,7 @@ typedef $$TransactionsTableCreateCompanionBuilder =
       Value<int?> fundId,
       Value<int> fundDelta,
       Value<bool> isWriteoff,
+      Value<int?> settlesTxId,
       Value<int?> autoEventId,
       Value<bool> needsReview,
       required int createdAt,
@@ -12904,6 +12972,7 @@ typedef $$TransactionsTableUpdateCompanionBuilder =
       Value<int?> fundId,
       Value<int> fundDelta,
       Value<bool> isWriteoff,
+      Value<int?> settlesTxId,
       Value<int?> autoEventId,
       Value<bool> needsReview,
       Value<int> createdAt,
@@ -13024,6 +13093,25 @@ final class $$TransactionsTableReferences
       $_db.funds,
     ).filter((f) => f.id.sqlEquals($_column));
     final item = $_typedResult.readTableOrNull(_fundIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static $TransactionsTable _settlesTxIdTable(_$AppDatabase db) =>
+      db.transactions.createAlias(
+        $_aliasNameGenerator(db.transactions.settlesTxId, db.transactions.id),
+      );
+
+  $$TransactionsTableProcessedTableManager? get settlesTxId {
+    final $_column = $_itemColumn<int>('settles_tx_id');
+    if ($_column == null) return null;
+    final manager = $$TransactionsTableTableManager(
+      $_db,
+      $_db.transactions,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_settlesTxIdTable($_db));
     if (item == null) return manager;
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: [item]),
@@ -13288,6 +13376,29 @@ class $$TransactionsTableFilterComposer
           }) => $$FundsTableFilterComposer(
             $db: $db,
             $table: $db.funds,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$TransactionsTableFilterComposer get settlesTxId {
+    final $$TransactionsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.settlesTxId,
+      referencedTable: $db.transactions,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$TransactionsTableFilterComposer(
+            $db: $db,
+            $table: $db.transactions,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -13568,6 +13679,29 @@ class $$TransactionsTableOrderingComposer
     return composer;
   }
 
+  $$TransactionsTableOrderingComposer get settlesTxId {
+    final $$TransactionsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.settlesTxId,
+      referencedTable: $db.transactions,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$TransactionsTableOrderingComposer(
+            $db: $db,
+            $table: $db.transactions,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
   $$NotificationEventsTableOrderingComposer get autoEventId {
     final $$NotificationEventsTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -13791,6 +13925,29 @@ class $$TransactionsTableAnnotationComposer
     return composer;
   }
 
+  $$TransactionsTableAnnotationComposer get settlesTxId {
+    final $$TransactionsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.settlesTxId,
+      referencedTable: $db.transactions,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$TransactionsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.transactions,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
   $$NotificationEventsTableAnnotationComposer get autoEventId {
     final $$NotificationEventsTableAnnotationComposer composer =
         $composerBuilder(
@@ -13861,6 +14018,7 @@ class $$TransactionsTableTableManager
             bool personId,
             bool recurringId,
             bool fundId,
+            bool settlesTxId,
             bool autoEventId,
             bool billItemsRefs,
           })
@@ -13895,6 +14053,7 @@ class $$TransactionsTableTableManager
                 Value<int?> fundId = const Value.absent(),
                 Value<int> fundDelta = const Value.absent(),
                 Value<bool> isWriteoff = const Value.absent(),
+                Value<int?> settlesTxId = const Value.absent(),
                 Value<int?> autoEventId = const Value.absent(),
                 Value<bool> needsReview = const Value.absent(),
                 Value<int> createdAt = const Value.absent(),
@@ -13918,6 +14077,7 @@ class $$TransactionsTableTableManager
                 fundId: fundId,
                 fundDelta: fundDelta,
                 isWriteoff: isWriteoff,
+                settlesTxId: settlesTxId,
                 autoEventId: autoEventId,
                 needsReview: needsReview,
                 createdAt: createdAt,
@@ -13943,6 +14103,7 @@ class $$TransactionsTableTableManager
                 Value<int?> fundId = const Value.absent(),
                 Value<int> fundDelta = const Value.absent(),
                 Value<bool> isWriteoff = const Value.absent(),
+                Value<int?> settlesTxId = const Value.absent(),
                 Value<int?> autoEventId = const Value.absent(),
                 Value<bool> needsReview = const Value.absent(),
                 required int createdAt,
@@ -13966,6 +14127,7 @@ class $$TransactionsTableTableManager
                 fundId: fundId,
                 fundDelta: fundDelta,
                 isWriteoff: isWriteoff,
+                settlesTxId: settlesTxId,
                 autoEventId: autoEventId,
                 needsReview: needsReview,
                 createdAt: createdAt,
@@ -13988,6 +14150,7 @@ class $$TransactionsTableTableManager
                 personId = false,
                 recurringId = false,
                 fundId = false,
+                settlesTxId = false,
                 autoEventId = false,
                 billItemsRefs = false,
               }) {
@@ -14100,6 +14263,21 @@ class $$TransactionsTableTableManager
                                   )
                                   as T;
                         }
+                        if (settlesTxId) {
+                          state =
+                              state.withJoin(
+                                    currentTable: table,
+                                    currentColumn: table.settlesTxId,
+                                    referencedTable:
+                                        $$TransactionsTableReferences
+                                            ._settlesTxIdTable(db),
+                                    referencedColumn:
+                                        $$TransactionsTableReferences
+                                            ._settlesTxIdTable(db)
+                                            .id,
+                                  )
+                                  as T;
+                        }
                         if (autoEventId) {
                           state =
                               state.withJoin(
@@ -14168,6 +14346,7 @@ typedef $$TransactionsTableProcessedTableManager =
         bool personId,
         bool recurringId,
         bool fundId,
+        bool settlesTxId,
         bool autoEventId,
         bool billItemsRefs,
       })

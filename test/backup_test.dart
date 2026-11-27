@@ -238,6 +238,83 @@ void main() {
       expect(cash.wallet.iconKey, 'cash');
       expect(cash.wallet.colorValue, 0xFF4CAF50);
     });
+
+    test('liên kết tất toán từng khoản giữ nguyên qua sao lưu (kể cả ngược thứ tự)',
+        () async {
+      final entryId = await sourceRepo.addTransaction(
+        kind: TxKind.lend,
+        amount: 300000,
+        occurredAt: DateTime(2026, 9, 1),
+        walletFromId: wallet,
+        personId: nam,
+        note: 'Cho mượn đi chơi',
+      );
+      await sourceRepo.addTransaction(
+        kind: TxKind.collect,
+        amount: 120000,
+        occurredAt: DateTime(2026, 9, 5),
+        walletToId: wallet,
+        personId: nam,
+        settlesTxId: entryId,
+        note: 'Tất toán: Cho mượn đi chơi',
+      );
+
+      final json = await sourceBackup.buildJson();
+
+      // Đảo thứ tự transactions để dòng tất toán đứng TRƯỚC khoản nợ gốc.
+      final data = jsonDecode(json) as Map<String, dynamic>;
+      data['transactions'] = (data['transactions'] as List).reversed.toList();
+
+      // Nhập ở chế độ gộp vào DB đã có giao dịch để id chắc chắn đổi khác.
+      final target = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(target.close);
+      await target.customStatement('PRAGMA foreign_keys = ON');
+      final targetRepo = Repository(target);
+      final existingWallet = (await targetRepo.watchWalletsWithBalance().first).first.id;
+      await targetRepo.addTransaction(
+        kind: TxKind.expense,
+        amount: 10000,
+        occurredAt: DateTime(2026, 9, 1),
+        walletFromId: existingWallet,
+      );
+
+      await BackupService(target).import(
+        jsonEncode(data),
+        mode: ImportMode.merge,
+      );
+
+      final all = await targetRepo.watchTransactions().first;
+      final restoredEntry =
+          all.firstWhere((v) => v.tx.note == 'Cho mượn đi chơi');
+      final restoredSettle =
+          all.firstWhere((v) => v.tx.note == 'Tất toán: Cho mượn đi chơi');
+
+      expect(restoredSettle.tx.settlesTxId, restoredEntry.tx.id);
+      expect(restoredEntry.debtRemaining, 180000);
+    });
+
+    test('file sao lưu cũ không có settlesTxId vẫn nhập bình thường', () async {
+      await sourceRepo.addTransaction(
+        kind: TxKind.lend,
+        amount: 200000,
+        occurredAt: DateTime(2026, 9, 6),
+        walletFromId: wallet,
+        personId: nam,
+      );
+
+      final data =
+          jsonDecode(await sourceBackup.buildJson()) as Map<String, dynamic>;
+      data['formatVersion'] = 6;
+      for (final tx in (data['transactions'] as List).cast<Map<String, dynamic>>()) {
+        tx.remove('settlesTxId');
+      }
+
+      final restored = await restoreToFreshDb(jsonEncode(data));
+      final txs = await restored.watchTransactions().first;
+      expect(txs, hasLength(1));
+      expect(txs.single.tx.settlesTxId, isNull);
+      expect(txs.single.debtRemaining, 200000);
+    });
   });
 
   group('chế độ nhập', () {

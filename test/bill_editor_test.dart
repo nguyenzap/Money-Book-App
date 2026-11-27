@@ -40,8 +40,7 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
   }
 
-  Future<void> tapText(WidgetTester tester, String text) async {
-    final finder = find.text(text);
+  Future<void> tapFinder(WidgetTester tester, Finder finder) async {
     await tester.scrollUntilVisible(
       finder,
       200,
@@ -50,6 +49,9 @@ void main() {
     await tester.tap(finder);
     await tester.pumpAndSettle();
   }
+
+  Future<void> tapText(WidgetTester tester, String text) =>
+      tapFinder(tester, find.text(text));
 
   Future<void> type(
     WidgetTester tester,
@@ -73,7 +75,7 @@ void main() {
     await open(tester);
 
     await tapText(tester, 'Ăn uống');
-    await tapText(tester, 'Hoá đơn chi tiết');
+    await tapFinder(tester, find.widgetWithText(SwitchListTile, 'Hoá đơn'));
     expect(
       find.text('Số tiền'),
       findsNothing,

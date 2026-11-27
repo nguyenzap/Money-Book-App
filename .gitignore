@@ -56,3 +56,6 @@ app.*.map.json
 
 #AI tools
 .claude/
+
+# Real phone backups (private data)
+moneybook_*.json

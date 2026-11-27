@@ -7,7 +7,7 @@ import '../../core/widgets.dart';
 import '../templates/template_screen.dart';
 import '../transactions/tx_editor_screen.dart';
 
-/// Bốn nút ghi nhanh, hiện trong bottom sheet khi bấm nút cộng. Có mẫu chi
+/// Các nút ghi nhanh, hiện trong bottom sheet khi bấm nút cộng. Có mẫu chi
 /// tiêu thì các mẫu đứng trên cùng.
 class QuickActionSheet extends ConsumerWidget {
   const QuickActionSheet({super.key});
@@ -70,6 +70,19 @@ class QuickActionSheet extends ConsumerWidget {
               onTap: () {
                 Navigator.pop(context);
                 openTxEditor(context, initialKind: TxKind.lend);
+              },
+            ),
+            ListTile(
+              leading: const IconAvatar(icon: Icons.receipt_long_outlined),
+              title: const Text('Ghi nợ'),
+              subtitle: const Text('Người khác trả dùm, mình nợ lại'),
+              onTap: () {
+                Navigator.pop(context);
+                openTxEditor(
+                  context,
+                  initialKind: TxKind.expense,
+                  initialPaidByOther: true,
+                );
               },
             ),
           ],

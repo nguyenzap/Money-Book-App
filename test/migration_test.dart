@@ -167,7 +167,7 @@ void main() {
 
     test('migration chạy được và lên đúng phiên bản', () async {
       final row = await db.customSelect('PRAGMA user_version').getSingle();
-      expect(row.data.values.first, 6);
+      expect(row.data.values.first, 7);
     });
 
     test('bảng mẫu chi tiêu đã có và dùng được ngay', () async {
@@ -299,6 +299,25 @@ void main() {
       expect(tx.needsReview, isTrue);
     });
 
+    test('cột settles_tx_id đã có và dùng được ngay', () async {
+      final txs = await repo.watchTransactions(personId: 1).first;
+      expect(txs, hasLength(1));
+      final lend = txs.single;
+      expect(lend.tx.settlesTxId, isNull);
+      expect(lend.debtRemaining, 200000);
+
+      await repo.addTransaction(
+        kind: TxKind.collect,
+        amount: 50000,
+        occurredAt: DateTime(2026, 9, 15),
+        walletToId: 1,
+        personId: 1,
+        settlesTxId: lend.tx.id,
+      );
+      final updated = await repo.getTransaction(lend.tx.id);
+      expect(updated?.debtRemaining, 150000);
+    });
+
     test('chạy lại migration lần nữa không hỏng gì', () async {
       // Mở lại chính database đó một lần nữa: user_version đã là mới nhất nên
       // onUpgrade không chạy, không được đẻ ra lỗi bảng đã tồn tại.
@@ -399,7 +418,7 @@ void main() {
       await db.customStatement('SELECT 1');
 
       final row = await db.customSelect('PRAGMA user_version').getSingle();
-      expect(row.data.values.first, 6);
+      expect(row.data.values.first, 7);
       expect(await repo.watchFunds().first, isEmpty);
       expect(await repo.watchTemplates().first, isEmpty);
       expect(await repo.watchTotalInFunds().first, 0);

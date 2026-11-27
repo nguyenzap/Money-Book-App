@@ -19,7 +19,6 @@ import 'widgets/fund_picker.dart';
 import 'widgets/impact_note_section.dart';
 import 'widgets/kind_selector.dart';
 import 'widgets/occurred_at_tile.dart';
-import 'widgets/paid_by_other_section.dart';
 import 'widgets/tx_kind_fields.dart';
 
 /// Mở màn hình ghi giao dịch. Gom một chỗ để mọi nơi trong app gọi giống nhau.
@@ -30,6 +29,7 @@ Future<void> openTxEditor(
   int? presetWalletId,
   int? presetPersonId,
   TemplateView? fromTemplate,
+  bool initialPaidByOther = false,
 }) {
   return Navigator.push<void>(
     context,
@@ -40,6 +40,7 @@ Future<void> openTxEditor(
         presetWalletId: presetWalletId,
         presetPersonId: presetPersonId,
         fromTemplate: fromTemplate,
+        initialPaidByOther: initialPaidByOther,
       ),
     ),
   );
@@ -58,6 +59,7 @@ class TxEditorScreen extends ConsumerStatefulWidget {
     this.presetWalletId,
     this.presetPersonId,
     this.fromTemplate,
+    this.initialPaidByOther = false,
   });
 
   final TxKind initialKind;
@@ -68,6 +70,9 @@ class TxEditorScreen extends ConsumerStatefulWidget {
   /// Mẫu chưa đủ trường để ghi một chạm: điền sẵn phần đã có, người dùng chỉ
   /// việc điền nốt.
   final TemplateView? fromTemplate;
+
+  /// Mở sẵn ở chế độ "Ghi nợ" (người khác trả dùm, mình nợ lại).
+  final bool initialPaidByOther;
 
   @override
   ConsumerState<TxEditorScreen> createState() => _TxEditorScreenState();
@@ -120,8 +125,6 @@ class _TxEditorScreenState extends ConsumerState<TxEditorScreen> {
 
   bool get _canSplit => _form.canSplit;
 
-  bool get _canPayByOther => _form.canPayByOther;
-
   bool get _canBill => _form.canBill;
 
   bool get _usesBill => _form.usesBill;
@@ -160,6 +163,7 @@ class _TxEditorScreenState extends ConsumerState<TxEditorScreen> {
       if (t.hasCategory) _categoryId = t.template.categoryId;
     } else {
       _kind = widget.initialKind;
+      _paidByOther = widget.initialPaidByOther;
       _occurredAt = DateTime.now();
       _personId = widget.presetPersonId;
       _applyPresetWallet();
@@ -333,7 +337,7 @@ class _TxEditorScreenState extends ConsumerState<TxEditorScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(_isEditing ? 'Sửa giao dịch' : 'Ghi giao dịch'),
+        title: Text(_form.title),
         actions: [
           if (_form.canSaveAsTemplate)
             IconButton(
@@ -365,8 +369,10 @@ class _TxEditorScreenState extends ConsumerState<TxEditorScreen> {
             child: ListView(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
               children: [
-                KindSelector(selected: _kind, onChanged: _changeKind),
-                const SizedBox(height: 20),
+                if (_form.showsKindSelector) ...[
+                  KindSelector(selected: _kind, onChanged: _changeKind),
+                  const SizedBox(height: 20),
+                ],
                 // Có hoá đơn thì số tiền là tổng hoá đơn, hiện ở cuối phần
                 // hoá đơn bên dưới, nên không cho gõ tay nữa.
                 if (!_usesBill) ...[
@@ -402,15 +408,6 @@ class _TxEditorScreenState extends ConsumerState<TxEditorScreen> {
                   BillSection(
                     state: _bill,
                     onChanged: () => setState(() {}),
-                  ),
-                ],
-                if (_canPayByOther) ...[
-                  const SizedBox(height: 8),
-                  PaidByOtherSection(
-                    value: _paidByOther,
-                    onChanged: (v) => setState(() => _paidByOther = v),
-                    personId: _personId,
-                    onPersonChanged: (v) => setState(() => _personId = v),
                   ),
                 ],
                 if (_canSplit) ...[

@@ -9,15 +9,17 @@ import '../../core/icons.dart';
 import '../../core/providers.dart';
 import '../../core/widgets.dart';
 
-/// Tất toán khoản nợ với một người.
+/// Tất toán khoản nợ với một người (toàn bộ dư nợ, hoặc một khoản [entry] cụ thể).
 ///
-/// Ghi một giao dịch ngược chiều đúng bằng số dư nợ hiện tại, hoặc xoá nợ nếu
-/// hai bên thống nhất bỏ qua.
+/// Ghi một giao dịch ngược chiều đúng bằng số tiền cần tất toán, hoặc xoá nợ
+/// nếu hai bên thống nhất bỏ qua.
 Future<void> showSettleDebtSheet(
   BuildContext context, {
   required Person person,
-  required int net,
+  int? net,
+  TxView? entry,
 }) {
+  assert(net != null || entry != null, 'Phải truyền net hoặc entry');
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
@@ -25,16 +27,21 @@ Future<void> showSettleDebtSheet(
       padding: EdgeInsets.only(
         bottom: MediaQuery.of(context).viewInsets.bottom,
       ),
-      child: _SettleDebtSheet(person: person, net: net),
+      child: _SettleDebtSheet(person: person, net: net, entry: entry),
     ),
   );
 }
 
 class _SettleDebtSheet extends ConsumerStatefulWidget {
-  const _SettleDebtSheet({required this.person, required this.net});
+  const _SettleDebtSheet({
+    required this.person,
+    this.net,
+    this.entry,
+  });
 
   final Person person;
-  final int net;
+  final int? net;
+  final TxView? entry;
 
   @override
   ConsumerState<_SettleDebtSheet> createState() => _SettleDebtSheetState();
@@ -42,19 +49,38 @@ class _SettleDebtSheet extends ConsumerStatefulWidget {
 
 class _SettleDebtSheetState extends ConsumerState<_SettleDebtSheet> {
   late final TextEditingController _controller;
+  TextEditingController? _noteController;
   late int _amount;
   int? _walletId;
   bool _writeoff = false;
 
+  bool get _isSingleEntry => widget.entry != null;
+
+  String get _entryLabel {
+    final e = widget.entry!;
+    final note = e.tx.note?.trim();
+    if (note != null && note.isNotEmpty) return note;
+    if (e.category != null) return e.category!.name;
+    return e.kind.label;
+  }
+
   /// Họ trả tiền cho mình thì mình thu nợ; ngược lại thì mình trả nợ.
-  bool get _theyOweMe => widget.net > 0;
+  bool get _theyOweMe =>
+      _isSingleEntry ? widget.entry!.tx.debtDelta > 0 : widget.net! > 0;
   TxKind get _kind => _theyOweMe ? TxKind.collect : TxKind.repay;
+
+  int get _targetAmount => _isSingleEntry
+      ? (widget.entry!.debtRemaining ?? widget.entry!.tx.debtDelta.abs())
+      : widget.net!.abs();
 
   @override
   void initState() {
     super.initState();
-    _amount = widget.net.abs();
+    _amount = _targetAmount;
     _controller = TextEditingController(text: groupDigits(_amount));
+    if (_isSingleEntry) {
+      _noteController = TextEditingController(text: 'Tất toán: $_entryLabel');
+    }
   }
 
   /// Chọn sẵn một ví để người dùng chỉ còn bấm xác nhận.
@@ -76,6 +102,7 @@ class _SettleDebtSheetState extends ConsumerState<_SettleDebtSheet> {
   @override
   void dispose() {
     _controller.dispose();
+    _noteController?.dispose();
     super.dispose();
   }
 
@@ -84,23 +111,45 @@ class _SettleDebtSheetState extends ConsumerState<_SettleDebtSheet> {
       showSnack(context, 'Nhập số tiền lớn hơn 0');
       return;
     }
+    if (_isSingleEntry && _amount > _targetAmount) {
+      showSnack(
+        context,
+        'Số tiền không được vượt quá ${formatVnd(_targetAmount)}',
+      );
+      return;
+    }
     if (!_writeoff && _walletId == null) {
       showSnack(context, 'Hãy chọn ví');
       return;
     }
 
+    final note = _isSingleEntry
+        ? (_noteController!.text.trim().isEmpty
+            ? 'Tất toán: $_entryLabel'
+            : _noteController!.text.trim())
+        : (_writeoff ? 'Xoá nợ' : 'Tất toán');
+
     final repo = ref.read(repositoryProvider);
-    await repo.addTransaction(
-      kind: _kind,
-      amount: _amount,
-      occurredAt: DateTime.now(),
-      // Xoá nợ thì không có tiền nào chạy đi đâu, nên không gắn ví nào cả.
-      walletFromId: _writeoff ? null : (_kind.needsWalletFrom ? _walletId : null),
-      walletToId: _writeoff ? null : (_kind.needsWalletTo ? _walletId : null),
-      personId: widget.person.id,
-      isWriteoff: _writeoff,
-      note: _writeoff ? 'Xoá nợ' : 'Tất toán',
-    );
+    try {
+      await repo.addTransaction(
+        kind: _kind,
+        amount: _amount,
+        occurredAt: DateTime.now(),
+        // Xoá nợ thì không có tiền nào chạy đi đâu, nên không gắn ví nào cả.
+        walletFromId:
+            _writeoff ? null : (_kind.needsWalletFrom ? _walletId : null),
+        walletToId:
+            _writeoff ? null : (_kind.needsWalletTo ? _walletId : null),
+        personId: widget.person.id,
+        isWriteoff: _writeoff,
+        settlesTxId: widget.entry?.tx.id,
+        note: note,
+      );
+    } on ArgumentError catch (e) {
+      if (!mounted) return;
+      showSnack(context, '${e.message}');
+      return;
+    }
 
     if (!mounted) return;
     Navigator.pop(context);
@@ -116,7 +165,8 @@ class _SettleDebtSheetState extends ConsumerState<_SettleDebtSheet> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final wallets = ref.watch(walletsProvider);
-    final isPartial = _amount != widget.net.abs();
+    final isOver = _isSingleEntry && _amount > _targetAmount;
+    final isPartial = _amount != _targetAmount && !isOver;
 
     return SafeArea(
       child: SingleChildScrollView(
@@ -136,14 +186,20 @@ class _SettleDebtSheetState extends ConsumerState<_SettleDebtSheet> {
               ),
             ),
             const SizedBox(height: 18),
-            Text('Tất toán', style: Theme.of(context).textTheme.titleLarge),
+            Text(
+              _isSingleEntry ? 'Tất toán khoản này' : 'Tất toán',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
             const SizedBox(height: 4),
             Text(
-              _theyOweMe
-                  ? '${widget.person.name} đang nợ bạn '
-                      '${formatVnd(widget.net.abs())}'
-                  : 'Bạn đang nợ ${widget.person.name} '
-                      '${formatVnd(widget.net.abs())}',
+              _isSingleEntry
+                  ? '$_entryLabel · ${_theyOweMe ? '${widget.person.name} nợ bạn' : 'Bạn nợ ${widget.person.name}'} '
+                      '${formatVnd(_targetAmount)}'
+                  : _theyOweMe
+                      ? '${widget.person.name} đang nợ bạn '
+                          '${formatVnd(_targetAmount)}'
+                      : 'Bạn đang nợ ${widget.person.name} '
+                          '${formatVnd(_targetAmount)}',
               style: TextStyle(color: scheme.outline),
             ),
             const SizedBox(height: 20),
@@ -153,12 +209,28 @@ class _SettleDebtSheetState extends ConsumerState<_SettleDebtSheet> {
               showQuickAdd: false,
               onChanged: (v) => setState(() => _amount = v),
             ),
-            if (isPartial && _amount > 0) ...[
+            if (isOver) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Vượt quá phần còn lại (${formatVnd(_targetAmount)}).',
+                style: TextStyle(fontSize: 12.5, color: scheme.error),
+              ),
+            ] else if (isPartial && _amount > 0) ...[
               const SizedBox(height: 8),
               Text(
                 'Trả một phần. Còn lại '
-                '${formatVnd((widget.net.abs() - _amount).abs())}.',
+                '${formatVnd((_targetAmount - _amount).abs())}.',
                 style: TextStyle(fontSize: 12.5, color: scheme.outline),
+              ),
+            ],
+            if (_isSingleEntry) ...[
+              const SizedBox(height: 14),
+              TextField(
+                controller: _noteController,
+                decoration: const InputDecoration(
+                  labelText: 'Ghi chú',
+                  prefixIcon: Icon(Icons.notes_outlined),
+                ),
               ),
             ],
             const SizedBox(height: 20),

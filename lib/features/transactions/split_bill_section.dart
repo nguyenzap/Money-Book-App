@@ -35,10 +35,7 @@ class SplitBillSection extends ConsumerWidget {
             state.enabled = v;
             onChanged();
           },
-          title: const Text('Trả dùm, chia tiền với người khác'),
-          subtitle: const Text(
-            'Bạn trả trước cả hoá đơn, những người kia nợ lại phần của họ',
-          ),
+          title: const Text('Trả dùm'),
         ),
         if (state.enabled) ...[
           const SizedBox(height: 8),
