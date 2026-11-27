@@ -17,7 +17,7 @@ class QuickActionSheet extends ConsumerWidget {
     final templates = ref.watch(templatesProvider).valueOrNull ?? const [];
 
     return SafeArea(
-      child: Padding(
+      child: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
         child: Column(
           mainAxisSize: MainAxisSize.min,

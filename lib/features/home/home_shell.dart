@@ -81,6 +81,10 @@ class _HomeShellState extends ConsumerState<HomeShell> {
   void _openQuickActions() {
     showModalBottomSheet<void>(
       context: context,
+      // Sheet cao hơn 9/16 màn hình (mặc định) khi có mẫu chi tiêu, nên cho
+      // nó tự cao theo nội dung và cuộn được trên máy màn nhỏ.
+      isScrollControlled: true,
+      useSafeArea: true,
       builder: (_) => const QuickActionSheet(),
     );
   }
